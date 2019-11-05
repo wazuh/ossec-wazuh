@@ -17,7 +17,6 @@ static void wm_cleanup();               // Cleanup function, called on exiting.
 static void wm_handler(int signum);     // Action on signal.
 
 static int flag_foreground = 0;         // Running in foreground.
-int wm_debug_level;
 
 // Main function
 
@@ -29,7 +28,6 @@ int main(int argc, char **argv)
     wmodule *cur_module;
     gid_t gid;
     const char *group = GROUPGLOBAL;
-    wm_debug_level = getDefine_Int("wazuh_modules", "debug", 0, 2);
 
     /* Set the name */
     OS_SetName(ARGV0);
@@ -58,17 +56,6 @@ int main(int argc, char **argv)
         }
     }
 
-    // Get default debug level
-
-    if (wm_debug == 0) {
-        wm_debug = wm_debug_level;
-
-        while (wm_debug != 0) {
-            nowDebug();
-            wm_debug--;
-        }
-    }
-
     /* Check if the group given is valid */
     gid = Privsep_GetGroup(group);
     if (gid == (gid_t) - 1) {
@@ -84,6 +71,17 @@ int main(int argc, char **argv)
 
     wm_setup();
 
+    // Get default debug level
+
+    if (wm_debug == 0) {
+        wm_debug = wm_cfg.log_level;
+
+        while (wm_debug != 0) {
+            nowDebug();
+            wm_debug--;
+        }
+    }    
+
     if (test_config)
         exit(EXIT_SUCCESS);
 
@@ -92,14 +90,14 @@ int main(int argc, char **argv)
     // Run modules
 
     for (cur_module = wmodules; cur_module; cur_module = cur_module->next) {
-        if (CreateThreadJoinable(&cur_module->thread, cur_module->context->start, cur_module->data) < 0) {
+        if (CreateThreadJoinable(&cur_module->thread, cur_module->context->start, cur_module->data, wm_cfg.thread_stack_size) < 0) {
             merror_exit("CreateThreadJoinable() for '%s': %s", cur_module->tag, strerror(errno));
         }
         mdebug2("Created new thread for the '%s' module.", cur_module->tag);
     }
 
     // Start com request thread
-    w_create_thread(wmcom_main, NULL);
+    w_create_thread(wmcom_main, NULL, wm_cfg.thread_stack_size);
 
     // Wait for threads
 

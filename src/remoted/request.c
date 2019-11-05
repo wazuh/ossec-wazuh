@@ -35,13 +35,7 @@ static OSHash * req_table;
 static pthread_mutex_t mutex_table = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t mutex_pool = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t pool_available = PTHREAD_COND_INITIALIZER;
-int rto_sec;
-int rto_msec;
-int max_attempts;
-int request_pool;
-int request_timeout;
-int response_timeout;
-int guess_agent_group;
+static int request_pool;
 
 // Request listener thread entry point
 void * req_main(__attribute__((unused)) void * arg) {
@@ -54,15 +48,7 @@ void * req_main(__attribute__((unused)) void * arg) {
 
     mdebug1("Running request listener thread.");
 
-    // Get values from internal options
-
-    request_pool = getDefine_Int("remoted", "request_pool", 1, 4096);
-    request_timeout = getDefine_Int("remoted", "request_timeout", 1, 600);
-    response_timeout = getDefine_Int("remoted", "response_timeout", 1, 3600);
-    rto_sec = getDefine_Int("remoted", "request_rto_sec", 0, 60);
-    rto_msec = getDefine_Int("remoted", "request_rto_msec", 0, 999);
-    max_attempts = getDefine_Int("remoted", "max_attempts", 1, 16);
-    guess_agent_group = getDefine_Int("remoted", "guess_agent_group", 0, 1);
+    request_pool = logr.request_pool;
 
     // Create hash table
 
@@ -86,7 +72,7 @@ void * req_main(__attribute__((unused)) void * arg) {
 
         {
             fd_set fdset;
-            struct timeval timeout = { request_timeout, 0 };
+            struct timeval timeout = { logr.request_timeout, 0 };
 
             FD_ZERO(&fdset);
             FD_SET(sock, &fdset);
@@ -168,7 +154,7 @@ void * req_main(__attribute__((unused)) void * arg) {
                 }
 
                 // Run thread
-                w_create_thread(req_dispatch, node);
+                w_create_thread(req_dispatch, node, logr.thread_stack_size);
 
                 // Do not close peer
                 continue;
@@ -238,7 +224,7 @@ void * req_dispatch(req_node_t * node) {
 
         mdebug2("Sending request: '%s'", payload);
 
-        for (attempts = 0; attempts < max_attempts; attempts++) {
+        for (attempts = 0; attempts < logr.max_attempts; attempts++) {
 
             // Try to send message
 
@@ -255,8 +241,8 @@ void * req_dispatch(req_node_t * node) {
 
             if (logr.proto[logr.position] == IPPROTO_UDP) {
                 gettimeofday(&now, NULL);
-                nsec = now.tv_usec * 1000 + rto_msec * 1000000;
-                timeout.tv_sec = now.tv_sec + rto_sec + nsec / 1000000000;
+                nsec = now.tv_usec * 1000 + logr.request_rto_msec * 1000000;
+                timeout.tv_sec = now.tv_sec + logr.request_rto_sec + nsec / 1000000000;
                 timeout.tv_nsec = nsec % 1000000000;
 
                 if (pthread_cond_timedwait(&node->available, &node->mutex, &timeout) == 0 && node->buffer) {
@@ -270,7 +256,7 @@ void * req_dispatch(req_node_t * node) {
             mdebug2("Timeout for waiting ACK from agent '%s', resending.", agentid);
         }
 
-        if (attempts == max_attempts) {
+        if (attempts == logr.max_attempts) {
             merror("Couldn't send request to agent '%s': number of attempts exceeded.", agentid);
 
             if (OS_SendSecureTCP(node->sock, strlen(WR_ATTEMPT_ERROR), WR_ATTEMPT_ERROR) < 0) {
@@ -282,9 +268,9 @@ void * req_dispatch(req_node_t * node) {
 
         // If buffer is ACK, wait for response
 
-        for (attempts = 0; attempts < max_attempts && (!node->buffer || IS_ACK(node->buffer)); attempts++) {
+        for (attempts = 0; attempts < logr.max_attempts && (!node->buffer || IS_ACK(node->buffer)); attempts++) {
             gettimeofday(&now, NULL);
-            timeout.tv_sec = now.tv_sec + response_timeout;
+            timeout.tv_sec = now.tv_sec + logr.response_timeout;
             timeout.tv_nsec = now.tv_usec * 1000;
 
             if (pthread_cond_timedwait(&node->available, &node->mutex, &timeout) == 0) {
@@ -296,7 +282,7 @@ void * req_dispatch(req_node_t * node) {
             }
         }
 
-        if (attempts == max_attempts) {
+        if (attempts == logr.max_attempts) {
             merror("Couldn't get response from agent '%s': number of attempts exceeded.", agentid);
             OS_SendSecureTCP(node->sock, strlen(WR_ATTEMPT_ERROR), WR_ATTEMPT_ERROR);
             goto cleanup;
@@ -382,7 +368,7 @@ int req_pool_wait() {
 
     while (!request_pool && wait_ok) {
         gettimeofday(&now, NULL);
-        timeout.tv_sec = now.tv_sec + request_timeout;
+        timeout.tv_sec = now.tv_sec + logr.request_timeout;
         timeout.tv_nsec = now.tv_usec * 1000;
 
         switch (pthread_cond_timedwait(&pool_available, &mutex_pool, &timeout)) {
@@ -417,17 +403,6 @@ size_t rem_getconfig(const char * section, char ** output) {
 
     if (strcmp(section, "remote") == 0){
         if (cfg = getRemoteConfig(), cfg) {
-            *output = strdup("ok");
-            json_str = cJSON_PrintUnformatted(cfg);
-            wm_strcat(output, json_str, ' ');
-            free(json_str);
-            cJSON_Delete(cfg);
-            return strlen(*output);
-        } else {
-            goto error;
-        }
-    } else if (strcmp(section, "internal") == 0){
-        if (cfg = getRemoteInternalConfig(), cfg) {
             *output = strdup("ok");
             json_str = cJSON_PrintUnformatted(cfg);
             wm_strcat(output, json_str, ' ');

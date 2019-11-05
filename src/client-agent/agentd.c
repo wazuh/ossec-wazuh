@@ -126,14 +126,14 @@ void AgentdStart(const char *dir, int uid, int gid, const char *user, const char
 
     /* Launch rotation thread */
 
-    w_create_thread(w_rotate_log_thread, (void *)NULL);
+    w_create_thread(w_rotate_log_thread, (void *)NULL, agt->thread_stack_size);
 
     /* Launch dispatch thread */
     if (agt->buffer){
 
         buffer_init();
 
-        w_create_thread(dispatch_buffer, (void *)NULL);
+        w_create_thread(dispatch_buffer, (void *)NULL, agt->thread_stack_size);
     }else{
         minfo(DISABLED_BUFFER);
     }
@@ -145,7 +145,7 @@ void AgentdStart(const char *dir, int uid, int gid, const char *user, const char
         rc++;
     }
 
-    w_create_thread(state_main, NULL);
+    w_create_thread(state_main, NULL, agt->thread_stack_size);
 
     /* Try to connect to the server */
     if (!connect_server(0)) {
@@ -183,7 +183,7 @@ void AgentdStart(const char *dir, int uid, int gid, const char *user, const char
 
     // Start request module
     req_init();
-    w_create_thread(req_receiver, NULL);
+    w_create_thread(req_receiver, NULL, agt->thread_stack_size);
 
     /* Send first notification */
     run_notify();

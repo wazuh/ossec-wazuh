@@ -37,8 +37,6 @@ int MailConf(int test_config, const char *cfgfile, MailConfig *Mail)
     Mail->gran_group = NULL;
     Mail->gran_set = NULL;
     Mail->gran_format = NULL;
-    Mail->grouping = 1;
-    Mail->strict_checking = 0;
     Mail->source = -1;
 #ifdef LIBGEOIP_ENABLED
     Mail->geoip = 0;
@@ -190,20 +188,20 @@ cJSON *getMailAlertsConfig(void) {
     return root;
 }
 
-cJSON *getMailInternalOptions(void) {
+cJSON *getMailOptions(void) {
 
     cJSON *root = cJSON_CreateObject();
-    cJSON *internals = cJSON_CreateObject();
     cJSON *maild = cJSON_CreateObject();
 
-    cJSON_AddNumberToObject(maild,"strict_checking",mail.strict_checking);
-    cJSON_AddNumberToObject(maild,"grouping",mail.grouping);
+    cJSON_AddStringToObject(maild, "strict_checking", mail.strict_checking ? "enabled" : "disabled");
+    cJSON_AddStringToObject(maild, "grouping", mail.grouping ? "enabled" : "disabled");
+    cJSON_AddStringToObject(maild, "full_subject", mail.subject_full ? "enabled" : "disabled");
 #ifdef LIBGEOIP_ENABLED
-    cJSON_AddNumberToObject(maild,"geoip",mail.geoip);
+    cJSON_AddStringToObject(maild, "geoip", mail.geoip ? "enabled" : "disabled");
 #endif
+    cJSON_AddNumberToObject(maild, "thread_stack_size", mail.thread_stack_size);
 
-    cJSON_AddItemToObject(internals,"mail",maild);
-    cJSON_AddItemToObject(root,"internal",internals);
+    cJSON_AddItemToObject(root, "mail", maild);
 
     return root;
 }

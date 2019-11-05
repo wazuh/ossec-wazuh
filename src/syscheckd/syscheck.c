@@ -21,7 +21,6 @@ syscheck_config syscheck;
 pthread_cond_t audit_thread_started;
 pthread_cond_t audit_hc_started;
 pthread_cond_t audit_db_consistency;
-int sys_debug_level;
 
 #ifdef USE_MAGIC
 #include <magic.h>
@@ -48,30 +47,53 @@ void init_magic(magic_t *cookie_ptr)
 }
 #endif /* USE_MAGIC */
 
-/* Read syscheck internal options */
-static void read_internal(int debug_level)
+/* Set syscheck options to default */
+static void init_conf()
 {
-    syscheck.tsleep = (unsigned int) getDefine_Int("syscheck", "sleep", 0, 64);
-    syscheck.sleep_after = getDefine_Int("syscheck", "sleep_after", 1, 9999);
-    syscheck.rt_delay = getDefine_Int("syscheck", "rt_delay", 1, 1000);
-    syscheck.max_depth = getDefine_Int("syscheck", "default_max_depth", 1, 320);
-    syscheck.file_max_size = (size_t)getDefine_Int("syscheck", "file_max_size", 0, 4095) * 1024 * 1024;
+    syscheck.tsleep = options.syscheck.sleep.def;
+    syscheck.sleep_after = options.syscheck.sleep_after.def;
+    syscheck.rt_delay = options.syscheck.rt_delay.def;
+    syscheck.max_audit_entries = options.syscheck.max_audit_entries.def;
+    syscheck.max_depth = options.syscheck.default_max_depth.def;
+    syscheck.sym_checker_interval = options.syscheck.symlink_scan_interval.def;
+    syscheck.file_max_size = MB_to_B(options.syscheck.file_max_size.def);
+    syscheck.log_level = options.syscheck.log_level.def;
+    syscheck.thread_stack_size = options.global.thread_stack_size.def;
+#ifdef WIN32
+   syscheck.max_fd_win_rt  = options.syscheck.max_fd_win_rt.def;
+#endif
+
+    return;
+}
+
+/* Set syscheck internal options */
+static void read_internal()
+{
+    int aux;
+    if ((aux = getDefine_Int("syscheck", "sleep", options.syscheck.sleep.min, options.syscheck.sleep.max)) != INT_OPT_NDEF)
+        syscheck.tsleep = (unsigned int) aux;
+    if ((aux = getDefine_Int("syscheck", "sleep_after", options.syscheck.sleep_after.min, options.syscheck.sleep_after.max)) != INT_OPT_NDEF)
+        syscheck.sleep_after = aux;
+    if ((aux = getDefine_Int("syscheck", "rt_delay", options.syscheck.rt_delay.min, options.syscheck.rt_delay.max)) != INT_OPT_NDEF)
+        syscheck.rt_delay = aux;
+    if ((aux = getDefine_Int("syscheck", "default_max_depth", options.syscheck.default_max_depth.min, options.syscheck.default_max_depth.max)) != INT_OPT_NDEF)
+        syscheck.max_depth = aux;
+    if ((aux = getDefine_Int("syscheck", "file_max_size", options.syscheck.file_max_size.min, options.syscheck.file_max_size.max)) != INT_OPT_NDEF)
+        syscheck.file_max_size = MB_to_B(aux);
+    if ((aux = getDefine_Int("syscheck", "symlink_scan_interval", options.syscheck.symlink_scan_interval.min, options.syscheck.symlink_scan_interval.max)) != INT_OPT_NDEF)
+        syscheck.sym_checker_interval = aux;
 
 #ifndef WIN32
-    syscheck.max_audit_entries = getDefine_Int("syscheck", "max_audit_entries", 1, 4096);
+    if ((aux = getDefine_Int("syscheck", "max_audit_entries", options.syscheck.max_audit_entries.min, options.syscheck.max_audit_entries.max)) != INT_OPT_NDEF)
+        syscheck.max_audit_entries = aux;
+#else
+    if ((aux = getDefine_Int("syscheck", "max_fd_win_rt", options.syscheck.max_fd_win_rt.min, options.syscheck.max_fd_win_rt.max)) != INT_OPT_NDEF)
+        syscheck.max_fd_win_rt = aux;
 #endif
-    sys_debug_level = getDefine_Int("syscheck", "debug", 0, 2);
-
-    /* Check current debug_level
-     * Command line setting takes precedence
-     */
-    if (debug_level == 0) {
-        int debug_level = sys_debug_level;
-        while (debug_level != 0) {
-            nowDebug();
-            debug_level--;
-        }
-    }
+    if ((aux = getDefine_Int("syscheck", "debug", options.syscheck.log_level.min, options.syscheck.log_level.max)) != INT_OPT_NDEF)
+        syscheck.log_level = aux;
+    if ((aux = getDefine_Int("wazuh", "thread_stack_size", options.global.thread_stack_size.min, options.global.thread_stack_size.max)) != INT_OPT_NDEF)
+        syscheck.thread_stack_size = aux;
 
     return;
 }
@@ -98,6 +120,14 @@ int fim_initialize() {
     }
     OSHash_SetFreeDataPointer(syscheck.fp, (void (*)(void *))free_syscheck_node_data);
 
+    // Set prefilter to NULL if it's not expressly allowed (ossec.conf in agent side).
+    if (!syscheck.allow_prefilter_cmd) {
+        if (syscheck.prefilter_cmd != NULL) {
+            mwarn(FIM_WARN_ALLOW_PREFILTER, syscheck.prefilter_cmd);
+        }
+        os_free(syscheck.prefilter_cmd);
+    }
+
     return 0;
 }
 
@@ -106,11 +136,8 @@ int fim_initialize() {
 /* syscheck main for Windows */
 int Start_win32_Syscheck()
 {
-    int debug_level = 0;
     int r = 0;
     char *cfg = DEFAULTCPATH;
-    /* Read internal options */
-    read_internal(debug_level);
 
     mdebug1(STARTED_MSG);
 
@@ -118,6 +145,8 @@ int Start_win32_Syscheck()
     if (File_DateofChange(cfg) < 0) {
         merror_exit(NO_CONFIG, cfg);
     }
+
+    init_conf();
 
     /* Read syscheck config */
     if ((r = Read_Syscheck_Config(cfg)) < 0) {
@@ -146,6 +175,9 @@ int Start_win32_Syscheck()
 
         minfo(FIM_DISABLED);
     }
+
+    /* Read internal options */
+    read_internal();
 
     /* Rootcheck config */
     if (rootcheck_init(0) == 0) {
@@ -314,15 +346,14 @@ int main(int argc, char **argv)
         merror_exit(SETGID_ERROR, group, errno, strerror(errno));
     }
 
-    /* Read internal options */
-    read_internal(debug_level);
-
     mdebug1(STARTED_MSG);
 
     /* Check if the configuration is present */
     if (File_DateofChange(cfg) < 0) {
         merror_exit(NO_CONFIG, cfg);
     }
+
+    init_conf();
 
     /* Read syscheck config */
     if ((r = Read_Syscheck_Config(cfg)) < 0) {
@@ -352,6 +383,20 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Read internal options */
+    read_internal();
+
+    /* Check current debug_level
+     * Command line setting takes precedence
+     */
+    if (debug_level == 0) {
+        int debug_level = syscheck.log_level;
+        while (debug_level != 0) {
+            nowDebug();
+            debug_level--;
+        }
+    }
+
     /* Rootcheck config */
     if (rootcheck_init(test_config) == 0) {
         syscheck.rootcheck = 1;
@@ -378,7 +423,7 @@ int main(int argc, char **argv)
     StartSIG(ARGV0);
 
     // Start com request thread
-    w_create_thread(syscom_main, NULL);
+    w_create_thread(syscom_main, NULL, syscheck.thread_stack_size);
 
     /* Create pid */
     if (CreatePID(ARGV0, getpid()) < 0) {

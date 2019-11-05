@@ -13,7 +13,7 @@
 
 typedef struct agent_flags_t {
     unsigned int auto_restart:1;
-    unsigned int remote_conf:1;
+    unsigned int remote_conf;
 } agent_flags_t;
 
 typedef struct agent_server {
@@ -40,6 +40,24 @@ typedef struct _agent {
     int crypto_method;
     wlabel_t *labels; /* null-ended label set */
     agent_flags_t flags;
+    /* Internal options */
+    /* Client buffer */
+    int tolerance;
+    int min_eps;
+    int warn_level;
+    int normal_level;
+    /* Client */
+    int state_interval;
+    int recv_timeout;
+    int log_level;
+    int recv_counter_flush;
+    int comp_average_printout;
+    int verify_msg_id;
+    int request_pool;
+    int rto_sec;
+    int rto_msec;
+    int max_attempts;
+    int thread_stack_size;
 } agent;
 
 /* Frees the Client struct  */

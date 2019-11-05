@@ -19,10 +19,80 @@ time_t available_server;
 int run_foreground;
 keystore keys;
 agent *agt;
-int remote_conf;
-int min_eps;
+
 int rotate_log;
-int agent_debug_level;
+
+/* Set client internal options to default */
+static void init_conf()
+{
+    /* Client buffer */
+    agt->tolerance = options.client_buffer.tolerance.def;
+    agt->min_eps = options.client_buffer.min_eps.def;
+    agt->warn_level = options.client_buffer.warn_level.def;
+    agt->normal_level = options.client_buffer.normal_level.def;
+    /* Client */
+    agt->state_interval = options.client.state_interval.def;
+    agt->recv_timeout = options.client.recv_timeout.def;
+    agt->flags.remote_conf = options.client.remote_conf.def;
+    agt->log_level = options.client.log_level.def;
+    agt->recv_counter_flush = options.client.recv_counter_flush.def;
+    agt->comp_average_printout = options.client.comp_average_printout.def;
+    agt->verify_msg_id = options.client.verify_msg_id.def;
+    agt->request_pool = options.client.request_pool.def;
+    agt->rto_sec = options.client.request_rto_sec.def;
+    agt->rto_msec = options.client.request_rto_msec.def;
+    agt->max_attempts = options.client.max_attempts.def;
+    agt->thread_stack_size = options.global.thread_stack_size.def;
+
+    return;
+}
+
+/* Set client internal options */
+static void read_internal()
+{
+    int aux;
+    /* Client buffer */
+    if ((aux = getDefine_Int("agent", "tolerance", options.client_buffer.tolerance.min, options.client_buffer.tolerance.max)) != INT_OPT_NDEF)
+        agt->tolerance = aux;
+    if ((aux = getDefine_Int("agent", "min_eps", options.client_buffer.min_eps.min, options.client_buffer.min_eps.max)) != INT_OPT_NDEF)
+        agt->min_eps = aux;
+    if ((aux = getDefine_Int("agent", "warn_level", options.client_buffer.warn_level.min, options.client_buffer.warn_level.max)) != INT_OPT_NDEF)
+        agt->warn_level = aux;
+    if ((aux = getDefine_Int("agent", "normal_level", options.client_buffer.normal_level.min, options.client_buffer.normal_level.max)) != INT_OPT_NDEF)
+        agt->normal_level = aux;
+    /* Client */
+    if ((aux = getDefine_Int("agent", "state_interval", options.client.state_interval.min, options.client.state_interval.max)) != INT_OPT_NDEF)
+        agt->state_interval = aux;
+    if ((aux = getDefine_Int("agent", "recv_timeout", options.client.recv_timeout.min, options.client.recv_timeout.max)) != INT_OPT_NDEF)
+        agt->recv_timeout = aux;
+    if ((aux = getDefine_Int("agent", "remote_conf", options.client.remote_conf.min, options.client.remote_conf.max)) != INT_OPT_NDEF)
+        agt->flags.remote_conf = aux;
+#ifdef WIN32
+    if ((aux = getDefine_Int("windows", "debug", options.client.log_level.min, options.client.log_level.max)) != INT_OPT_NDEF)
+        agt->log_level = aux;
+#else
+    if ((aux = getDefine_Int("agent", "debug", options.client.log_level.min, options.client.log_level.max)) != INT_OPT_NDEF)
+        agt->log_level = aux;
+#endif
+    if ((aux = getDefine_Int("remoted", "recv_counter_flush", options.client.recv_counter_flush.min, options.client.recv_counter_flush.max)) != INT_OPT_NDEF)
+        agt->recv_counter_flush = aux;
+    if ((aux =  getDefine_Int("remoted", "comp_average_printout", options.client.comp_average_printout.min, options.client.comp_average_printout.max)) != INT_OPT_NDEF)
+        agt->comp_average_printout = aux;
+    if ((aux =  getDefine_Int("remoted", "verify_msg_id", options.client.verify_msg_id.min, options.client.verify_msg_id.max)) != INT_OPT_NDEF)
+        agt->verify_msg_id = aux;
+    if((aux = getDefine_Int("remoted", "request_pool", options.client.request_pool.min, options.client.request_pool.max)) != INT_OPT_NDEF)
+        agt->request_pool = aux;
+    if((aux = getDefine_Int("remoted", "request_rto_sec", options.client.request_rto_sec.min, options.client.request_rto_sec.max)) != INT_OPT_NDEF)
+        agt->rto_sec = aux;
+    if ((aux = getDefine_Int("remoted", "request_rto_msec", options.client.request_rto_msec.min, options.client.request_rto_msec.max)) != INT_OPT_NDEF)
+        agt->rto_msec = aux;
+    if ((aux = getDefine_Int("remoted", "max_attempts", options.client.max_attempts.min, options.client.max_attempts.max)) != INT_OPT_NDEF)
+        agt->max_attempts = aux;
+    if ((aux = getDefine_Int("wazuh", "thread_stack_size", options.global.thread_stack_size.min, options.global.thread_stack_size.max)) != INT_OPT_NDEF)
+        agt->thread_stack_size = aux;        
+
+    return;
+}
 
 /* Read the config file (for the remote client) */
 int ClientConf(const char *cfgfile)
@@ -44,21 +114,24 @@ int ClientConf(const char *cfgfile)
     os_calloc(1, sizeof(wlabel_t), agt->labels);
     modules |= CCLIENT;
 
+    init_conf();
+
     if (ReadConfig(modules, cfgfile, agt, NULL) < 0 ||
         ReadConfig(CLABELS | CBUFFER, cfgfile, &agt->labels, agt) < 0) {
         return (OS_INVALID);
     }
 
+    read_internal();
+
 #ifdef CLIENT
-    if(agt->flags.remote_conf = getDefine_Int("agent", "remote_conf", 0, 1), agt->flags.remote_conf) {
-        remote_conf = agt->flags.remote_conf;
+    if(agt->flags.remote_conf) {
         ReadConfig(CLABELS | CBUFFER | CAGENT_CONFIG, AGENTCONFIG, &agt->labels, agt);
     }
 #endif
 
-    if (min_eps = getDefine_Int("agent", "min_eps", 1, 1000), agt->events_persec < min_eps) {
-        mwarn("Client buffer throughput too low: set to %d eps", min_eps);
-        agt->events_persec = min_eps;
+    if (agt->events_persec < agt->min_eps) {
+        mwarn("Client buffer throughput too low: set to %d eps", agt->min_eps);
+        agt->events_persec = agt->min_eps;
     }
 
     return (1);
@@ -96,7 +169,34 @@ cJSON *getClientConfig(void) {
         }
         cJSON_AddItemToObject(client,"server",servers);
     }
-    cJSON_AddItemToObject(root,"client",client);
+
+    cJSON *remoted = cJSON_CreateObject();
+
+    if (agt->state_interval) cJSON_AddNumberToObject(remoted, "state_interval", agt->state_interval);
+    else cJSON_AddStringToObject(remoted, "state_interval", "disabled");
+    cJSON_AddNumberToObject(remoted, "recv_timeout", agt->recv_timeout);
+#ifdef CLIENT
+    cJSON_AddStringToObject(remoted, "remote_conf", agt->flags.remote_conf ? "enabled" : "disabled");
+#endif
+    cJSON_AddNumberToObject(remoted, "max_attempts", agt->max_attempts);
+
+    cJSON *request = cJSON_CreateObject();
+
+    cJSON_AddNumberToObject(request, "pool", agt->request_pool);
+    cJSON_AddNumberToObject(request, "rto_sec", agt->rto_sec);
+    cJSON_AddNumberToObject(request, "rto_msec", agt->rto_msec);
+
+    cJSON_AddItemToObject(remoted, "request", request);
+
+    cJSON_AddNumberToObject(remoted, "comp_average_printout", agt->comp_average_printout);
+    cJSON_AddNumberToObject(remoted, "recv_counter_flush", agt->recv_counter_flush);
+    cJSON_AddNumberToObject(remoted, "verify_msg_id", agt->verify_msg_id);
+    cJSON_AddNumberToObject(remoted, "thread_stack_size", agt->thread_stack_size);
+    cJSON_AddNumberToObject(remoted, "log_level", agt->log_level);
+
+    cJSON_AddItemToObject(client, "remote", remoted);
+
+    cJSON_AddItemToObject(root, "client", client);
 
     return root;
 }
@@ -109,12 +209,20 @@ cJSON *getBufferConfig(void) {
 
     cJSON *root = cJSON_CreateObject();
     cJSON *buffer = cJSON_CreateObject();
+    cJSON *bucket = cJSON_CreateObject();
 
-    if (agt->buffer) cJSON_AddStringToObject(buffer,"disabled","no"); else cJSON_AddStringToObject(buffer,"disabled","yes");
-    cJSON_AddNumberToObject(buffer,"queue_size",agt->buflength);
-    cJSON_AddNumberToObject(buffer,"events_per_second",agt->events_persec);
+    if (agt->buffer) cJSON_AddStringToObject(buffer, "disabled", "no"); else cJSON_AddStringToObject(buffer, "disabled", "yes");
+    cJSON_AddNumberToObject(buffer, "queue_size", agt->buflength);
+    cJSON_AddNumberToObject(buffer, "events_per_second", agt->events_persec);
+    cJSON_AddNumberToObject(buffer, "tolerance", agt->tolerance);
 
-    cJSON_AddItemToObject(root,"buffer",buffer);
+    cJSON_AddNumberToObject(bucket, "warn_level", agt->warn_level);
+    cJSON_AddNumberToObject(bucket, "normal_level", agt->normal_level);
+    cJSON_AddItemToObject(buffer, "buffer", bucket);
+
+    cJSON_AddNumberToObject(buffer, "min_eps", agt->min_eps);
+
+    cJSON_AddItemToObject(root, "buffer", buffer);
 
     return root;
 }
@@ -141,48 +249,6 @@ cJSON *getLabelsConfig(void) {
     }
     
     cJSON_AddItemToObject(root, "labels", labels);
-
-    return root;
-}
-
-
-cJSON *getAgentInternalOptions(void) {
-
-    cJSON *root = cJSON_CreateObject();
-    cJSON *internals = cJSON_CreateObject();
-
-    cJSON *agent = cJSON_CreateObject();
-
-#ifdef WIN32
-    cJSON_AddNumberToObject(agent, "debug", win_debug_level);
-#else
-    cJSON_AddNumberToObject(agent, "debug", agent_debug_level);
-#endif
-    cJSON_AddNumberToObject(agent, "warn_level", warn_level);
-    cJSON_AddNumberToObject(agent, "normal_level", normal_level);
-    cJSON_AddNumberToObject(agent, "tolerance", tolerance);
-    cJSON_AddNumberToObject(agent, "recv_timeout", timeout);
-    cJSON_AddNumberToObject(agent, "state_interval", interval);
-    cJSON_AddNumberToObject(agent, "min_eps", min_eps);
-#ifdef CLIENT
-    cJSON_AddNumberToObject(agent,"remote_conf", remote_conf);
-#endif
-
-    cJSON_AddItemToObject(internals, "agent", agent);
-
-    cJSON *remoted = cJSON_CreateObject();
-
-    cJSON_AddNumberToObject(remoted, "request_pool", request_pool);
-    cJSON_AddNumberToObject(remoted, "request_rto_sec", rto_sec);
-    cJSON_AddNumberToObject(remoted, "request_rto_msec", rto_msec);
-    cJSON_AddNumberToObject(remoted, "max_attempts", max_attempts);
-    cJSON_AddNumberToObject(remoted, "comp_average_printout", _s_comp_print);
-    cJSON_AddNumberToObject(remoted, "recv_counter_flush", _s_recv_flush);
-    cJSON_AddNumberToObject(remoted, "verify_msg_id", _s_verify_counter);
-
-    cJSON_AddItemToObject(internals, "remoted", remoted);
-
-    cJSON_AddItemToObject(root, "internal", internals);
 
     return root;
 }

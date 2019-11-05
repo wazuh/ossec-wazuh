@@ -224,6 +224,8 @@ typedef struct _config {
     char **audit_key;               // Listen audit keys
     int audit_healthcheck;          // Startup health-check for whodata
     int sym_checker_interval;
+    int log_level;
+    int thread_stack_size;
 
     OSHash *fp;
     OSHash *last_check;
@@ -233,6 +235,7 @@ typedef struct _config {
     rtfim *realtime;
 
     char *prefilter_cmd;
+    int allow_prefilter_cmd;
 
 } syscheck_config;
 
@@ -248,5 +251,8 @@ void Free_Syscheck(syscheck_config * config);
 char* check_ascci_hex (char *input);
 
 void log_realtime_status(int);
+
+size_t B_to_MB(size_t value);
+size_t MB_to_B(size_t value);
 
 #endif /* SYSCHECKC_H */

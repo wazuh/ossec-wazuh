@@ -44,7 +44,7 @@ size_t authcom_getconfig(const char * section, char ** output) {
     cJSON *cfg;
     char *json_str;
 
-    if (strcmp(section, "auth") == 0){
+    if (strcmp(section, "auth") == 0) {
         if (cfg = getAuthdConfig(), cfg) {
             *output = strdup("ok");
             json_str = cJSON_PrintUnformatted(cfg);

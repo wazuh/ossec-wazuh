@@ -267,6 +267,5 @@ int _setlevels(RuleNode *node, int nnode);
 #define SCA_MOD             "sca"
 /* Global variables */
 extern int _max_freq;
-extern int default_timeframe;
 
 #endif /* OS_RULES */

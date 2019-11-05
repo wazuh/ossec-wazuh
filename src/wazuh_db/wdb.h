@@ -127,10 +127,12 @@ typedef struct wdb_t {
 } wdb_t;
 
 typedef struct wdb_config {
-    int sock_queue_size;
     int worker_pool_size;
     int commit_time;
     int open_db_limit;
+    int rlimit_nofile;
+    int log_level;
+    int thread_stack_size;
 } wdb_config;
 
 /* Global SQLite database */
@@ -558,6 +560,12 @@ wdb_t * wdb_backup(wdb_t *wdb, int version);
 /* Create backup for agent. Returns 0 on success or -1 on error. */
 int wdb_create_backup(const char * agent_id, int version);
 
+/* Com request thread dispatcher */
+size_t wdbcom_dispatch(char * command, char ** output);
+size_t wdbcom_getconfig(const char * section, char ** output);
+void * wdbcom_main(__attribute__((unused)) void * arg);
+
+cJSON *getWDBOptions(void);
 // Finalize a statement securely
 #define wdb_finalize(x) { if (x) { sqlite3_finalize(x); x = NULL; } }
 

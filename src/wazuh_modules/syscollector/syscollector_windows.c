@@ -280,7 +280,7 @@ void sys_ports_windows(const char* LOCATION, int check_all){
     int i = 0, j = 0;
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     // Set random ID for each scan
 
@@ -730,7 +730,7 @@ end:
 void sys_programs_windows(const char* LOCATION){
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     // Set timestamp
     char *timestamp = w_get_timestamp(time(NULL));
@@ -814,7 +814,7 @@ void sys_programs_windows(const char* LOCATION){
 // Get installed hotfixes inventory
 
 void sys_hotfixes(const char* LOCATION){
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
     char *timestamp = w_get_timestamp(time(NULL));
     int ID = wm_sys_get_random_id();
     HKEY main_key;
@@ -1858,7 +1858,7 @@ void sys_network_windows(const char* LOCATION){
     if (dwRetVal != NO_ERROR) return;
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     // Set random ID and timestamp
 
@@ -2151,7 +2151,7 @@ void sys_proc_windows(const char* LOCATION) {
     char read_buff[OS_MAXSTR];
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     // Set timestamp
 

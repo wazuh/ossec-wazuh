@@ -79,7 +79,7 @@ void SecurityConfigurationAssessmentInit()
 
     request_queue = queue_init(1024);
 
-    w_create_thread(RequestDBThread,NULL);
+    w_create_thread(RequestDBThread, NULL, Config.thread_stack_size);
 
     mdebug1("SecurityConfigurationAssessmentInit completed.");
 }

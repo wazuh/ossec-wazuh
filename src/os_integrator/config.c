@@ -15,6 +15,23 @@
 
 IntegratorConfig **integrator_config;
 
+int OS_ReadIntegratorOptions(char *cfgfile, IntegratorOptions *integrator_options)
+{
+    int modules = 0;
+
+    /* Modules for the configuration */
+    modules |= CINTEGRATOR;
+
+    /* Reading configuration */
+    if(ReadConfig(modules, cfgfile, integrator_options, NULL) < 0)
+    {
+        merror_exit(CONFIG_ERROR, cfgfile);
+        return(OS_INVALID);
+    }
+
+    return 0;
+}
+
 void **OS_ReadIntegratorConf(char *cfgfile, IntegratorConfig ***integrator_config)
 {
     int modules = 0;
@@ -64,6 +81,9 @@ cJSON *getIntegratorConfig(void) {
         }
         cJSON_AddItemToArray(integrator,cfg);
     }
+
+    cJSON_AddNumberToObject(integrator,"log_level",integrator_options.log_level);
+    cJSON_AddNumberToObject(integrator,"thread_stack_size",integrator_options.thread_stack_size);
 
     cJSON_AddItemToObject(root,"integration",integrator);
 

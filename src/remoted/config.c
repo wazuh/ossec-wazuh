@@ -15,25 +15,6 @@
 #include "remoted.h"
 #include "config/config.h"
 
-/* Global variables */
-int timeout;
-int pass_empty_keyfile;
-int sender_pool;
-int rto_sec;
-int rto_msec;
-int max_attempts;
-int request_pool;
-int request_timeout;
-int response_timeout;
-int INTERVAL;
-rlim_t nofile;
-int guess_agent_group;
-int group_data_flush;
-unsigned receive_chunk;
-int buffer_relax;
-int tcp_keepidle;
-int tcp_keepintvl;
-int tcp_keepcnt;
 
 /* Read the config file (the remote access) */
 int RemotedConfig(const char *cfgfile, remoted *cfg)
@@ -46,11 +27,7 @@ int RemotedConfig(const char *cfgfile, remoted *cfg)
     cfg->conn = NULL;
     cfg->allowips = NULL;
     cfg->denyips = NULL;
-    cfg->nocmerged = 0;
     cfg->queue_size = 131072;
-
-    receive_chunk = (unsigned)getDefine_Int("remoted", "receive_chunk", 1024, 16384);
-    buffer_relax = getDefine_Int("remoted", "buffer_relax", 0, 2);
 
     if (ReadConfig(modules, cfgfile, cfg, NULL) < 0) {
         return (OS_INVALID);
@@ -85,6 +62,15 @@ cJSON *getRemoteConfig(void) {
 
     cJSON *root = cJSON_CreateObject();
     cJSON *rem = cJSON_CreateArray();
+    cJSON *common = cJSON_CreateObject();
+    cJSON *pool = cJSON_CreateObject();
+    cJSON *timeout = cJSON_CreateObject();
+    cJSON *request = cJSON_CreateObject();
+    cJSON *shared = cJSON_CreateObject();
+    cJSON *interval = cJSON_CreateObject();
+    cJSON *group = cJSON_CreateObject();
+    cJSON *memory = cJSON_CreateObject();
+    cJSON *tcp = cJSON_CreateObject();
     unsigned int i,j;
     char port[255] = {0};
     char queue_size[255] = {0};
@@ -123,44 +109,47 @@ cJSON *getRemoteConfig(void) {
         }
     }
 
-    cJSON_AddItemToObject(root,"remote",rem);
+    cJSON_AddNumberToObject(common, "recv_counter_flush", logr.recv_counter_flush);
+    cJSON_AddNumberToObject(common, "comp_average_printout", logr.comp_average_printout);
+    cJSON_AddNumberToObject(common, "verify_msg_id", logr.verify_msg_id);
+    cJSON_AddNumberToObject(common, "pass_empty_keyfile", logr.pass_empty_keyfile);
+    cJSON_AddNumberToObject(common, "rlimit_nofile", logr.rlimit_nofile);
+    cJSON_AddNumberToObject(pool,"sender_pool", logr.sender_pool);
+    cJSON_AddNumberToObject(pool,"request_pool", logr.request_pool);
+    cJSON_AddNumberToObject(pool,"worker_pool", logr.worker_pool);
+    cJSON_AddNumberToObject(timeout, "max_attempts", logr.max_attempts);
+    cJSON_AddNumberToObject(timeout, "request_timeout", logr.request_timeout);
+    cJSON_AddNumberToObject(timeout, "response_timeout", logr.response_timeout);
+    cJSON_AddNumberToObject(timeout, "recv_timeout", logr.recv_timeout);
+    cJSON_AddNumberToObject(timeout, "send_timeout", logr.send_timeout);
+    cJSON_AddNumberToObject(request, "request_rto_sec", logr.request_rto_sec);
+    cJSON_AddNumberToObject(request, "request_rto_msec", logr.request_rto_msec);
+    cJSON_AddNumberToObject(shared, "merge_shared", logr.nocmerged);
+    cJSON_AddNumberToObject(shared, "shared_reload", logr.shared_reload);
+    cJSON_AddNumberToObject(interval, "keyupdate_interval", logr.keyupdate_interval);
+    cJSON_AddNumberToObject(interval, "state_interval", logr.state_interval);
+    cJSON_AddNumberToObject(group, "guess_agent_group", logr.guess_agent_group);
+    cJSON_AddNumberToObject(group, "group_data_flush", logr.group_data_flush);
+    cJSON_AddNumberToObject(memory, "receive_chunk", logr.receive_chunk);
+    cJSON_AddNumberToObject(memory, "buffer_relax", logr.buffer_relax);
+    cJSON_AddNumberToObject(tcp, "tcp_keepidle", logr.tcp_keepidle);
+    cJSON_AddNumberToObject(tcp, "tcp_keepintvl", logr.tcp_keepintvl);
+    cJSON_AddNumberToObject(tcp, "tcp_keepcnt", logr.tcp_keepcnt);
+    cJSON_AddNumberToObject(common, "log_level", logr.log_level);
+    cJSON_AddNumberToObject(common, "thread_stack_size", logr.thread_stack_size);
+
+
+    cJSON_AddItemToObject(rem, "common", common);
+    cJSON_AddItemToObject(rem, "pool", pool);
+    cJSON_AddItemToObject(rem, "timeout", timeout);
+    cJSON_AddItemToObject(rem, "request", request);
+    cJSON_AddItemToObject(rem, "shared", shared);
+    cJSON_AddItemToObject(rem, "interval", interval);
+    cJSON_AddItemToObject(rem, "group", group);
+    cJSON_AddItemToObject(rem, "memory", memory);
+    cJSON_AddItemToObject(rem, "tcp", tcp);
+    cJSON_AddItemToObject(root, "remote", rem);
 
     return root;
 }
 
-
-cJSON *getRemoteInternalConfig(void) {
-
-    cJSON *root = cJSON_CreateObject();
-    cJSON *internals = cJSON_CreateObject();
-    cJSON *remoted = cJSON_CreateObject();
-
-    cJSON_AddNumberToObject(remoted,"recv_counter_flush",_s_recv_flush);
-    cJSON_AddNumberToObject(remoted,"comp_average_printout",_s_comp_print);
-    cJSON_AddNumberToObject(remoted,"verify_msg_id",_s_verify_counter);
-    cJSON_AddNumberToObject(remoted,"recv_timeout",timeout);
-    cJSON_AddNumberToObject(remoted,"pass_empty_keyfile",pass_empty_keyfile);
-    cJSON_AddNumberToObject(remoted,"sender_pool",sender_pool);
-    cJSON_AddNumberToObject(remoted,"request_pool",request_pool);
-    cJSON_AddNumberToObject(remoted,"request_rto_sec",rto_sec);
-    cJSON_AddNumberToObject(remoted,"request_rto_msec",rto_msec);
-    cJSON_AddNumberToObject(remoted,"max_attempts",max_attempts);
-    cJSON_AddNumberToObject(remoted,"request_timeout",request_timeout);
-    cJSON_AddNumberToObject(remoted,"response_timeout",response_timeout);
-    cJSON_AddNumberToObject(remoted,"shared_reload",INTERVAL);
-    cJSON_AddNumberToObject(remoted,"rlimit_nofile",nofile);
-    cJSON_AddNumberToObject(remoted,"merge_shared",logr.nocmerged);
-    cJSON_AddNumberToObject(remoted,"guess_agent_group",guess_agent_group);
-    cJSON_AddNumberToObject(remoted,"group_data_flush",group_data_flush);
-    cJSON_AddNumberToObject(remoted,"receive_chunk",receive_chunk);
-    cJSON_AddNumberToObject(remoted,"buffer_relax",buffer_relax);
-    cJSON_AddNumberToObject(remoted,"tcp_keepidle",tcp_keepidle);
-    cJSON_AddNumberToObject(remoted,"tcp_keepintvl",tcp_keepintvl);
-    cJSON_AddNumberToObject(remoted,"tcp_keepcnt",tcp_keepcnt);
-
-    cJSON_AddItemToObject(internals,"remoted",remoted);
-    cJSON_AddItemToObject(root,"internal",internals);
-
-    return root;
-
-}

@@ -15,10 +15,38 @@
 #include "os_crypto/sha256/sha256_op.h"
 
 wmodule *wmodules = NULL;   // Config: linked list of all modules.
-int wm_task_nice = 0;       // Nice value for tasks.
-int wm_max_eps;             // Maximum events per second sent by OpenScap and CIS-CAT Wazuh Module
-int wm_kill_timeout;        // Time for a process to quit before killing it
-int wm_debug_level;
+wmodules_config wm_cfg;    // Configuration for Wazuh module
+
+/* Set Wazuh modules configuration options to default */
+static void init_conf()
+{
+    wm_cfg.task_nice = options.wazuh_modules.task_nice.def;
+    wm_cfg.max_eps = options.wazuh_modules.max_eps.def;
+    wm_cfg.kill_timeout = options.wazuh_modules.kill_timeout.def;
+    wm_cfg.log_level = options.wazuh_modules.log_level.def;
+    wm_cfg.thread_stack_size = options.global.thread_stack_size.def;
+
+    return;
+}
+
+/* Set Wazuh modules configuration options */
+static void read_internal()
+{
+    int aux;
+
+    if ((aux = getDefine_Int("wazuh_modules", "task_nice", options.wazuh_modules.task_nice.min, options.wazuh_modules.task_nice.max)) != INT_OPT_NDEF)
+        wm_cfg.task_nice = aux;
+    if ((aux = getDefine_Int("wazuh_modules", "max_eps", options.wazuh_modules.max_eps.min, options.wazuh_modules.max_eps.max)) != INT_OPT_NDEF)
+        wm_cfg.max_eps = aux;
+    if ((aux = getDefine_Int("wazuh_modules", "kill_timeout", options.wazuh_modules.kill_timeout.min, options.wazuh_modules.kill_timeout.max)) != INT_OPT_NDEF)
+        wm_cfg.kill_timeout = aux;
+    if ((aux = getDefine_Int("wazuh_modules", "debug", options.wazuh_modules.log_level.min, options.wazuh_modules.log_level.max)) != INT_OPT_NDEF)
+        wm_cfg.log_level = aux;
+    if ((aux = getDefine_Int("wazuh", "thread_stack_size", options.global.thread_stack_size.min, options.global.thread_stack_size.max)) != INT_OPT_NDEF)
+        wm_cfg.thread_stack_size = aux;
+
+    return;
+}
 
 // Read XML configuration and internal options
 
@@ -26,11 +54,7 @@ int wm_config() {
 
     int agent_cfg = 0;
 
-    // Get defined values from internal_options
-
-    wm_task_nice = getDefine_Int("wazuh_modules", "task_nice", -20, 19);
-    wm_max_eps = getDefine_Int("wazuh_modules", "max_eps", 1, 1000);
-    wm_kill_timeout = getDefine_Int("wazuh_modules", "kill_timeout", 0, 3600);
+    init_conf();
 
     // Read configuration: ossec.conf
 
@@ -38,7 +62,7 @@ int wm_config() {
         return -1;
     }
 
-
+    read_internal();
 
 #ifdef CLIENT
     // Read configuration: agent.conf
@@ -266,6 +290,7 @@ cJSON *getModulesConfig(void) {
     wmodule *cur_module;
 
     cJSON *root = cJSON_CreateObject();
+    cJSON *wm_common = cJSON_CreateObject();
     cJSON *wm_mod = cJSON_CreateArray();
 
     for (cur_module = wmodules; cur_module; cur_module = cur_module->next) {
@@ -278,27 +303,17 @@ cJSON *getModulesConfig(void) {
         }
     }
 
+    cJSON_AddNumberToObject(wm_common, "task_nice", wm_cfg.task_nice);
+    cJSON_AddNumberToObject(wm_common, "max_eps", wm_cfg.max_eps);
+    cJSON_AddNumberToObject(wm_common, "kill_timeout", wm_cfg.kill_timeout);
+    cJSON_AddNumberToObject(wm_common, "log_level", wm_cfg.log_level);
+    cJSON_AddNumberToObject(wm_common, "thread_stack_size", wm_cfg.thread_stack_size);
+
+    cJSON_AddItemToObject(wm_mod, "wmodules", wm_common);
     cJSON_AddItemToObject(root,"wmodules",wm_mod);
 
     return root;
 }
-
-
-cJSON *getModulesInternalOptions(void) {
-
-    cJSON *root = cJSON_CreateObject();
-    cJSON *internals = cJSON_CreateObject();
-
-    cJSON_AddNumberToObject(internals,"wazuh_modules.task_nice",wm_task_nice);
-    cJSON_AddNumberToObject(internals,"wazuh_modules.max_eps",wm_max_eps);
-    cJSON_AddNumberToObject(internals,"wazuh_modules.kill_timeout",wm_kill_timeout);
-    cJSON_AddNumberToObject(internals,"wazuh_modules.debug",wm_debug_level);
-
-    cJSON_AddItemToObject(root,"internal_options",internals);
-
-    return root;
-}
-
 
 // Send message to a queue waiting for a specific delay
 int wm_sendmsg(int usec, int queue, const char *message, const char *locmsg, char loc) {

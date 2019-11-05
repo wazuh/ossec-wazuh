@@ -156,7 +156,6 @@ void rem_inc_dequeued();
 // Read config
 size_t rem_getconfig(const char * section, char ** output);
 cJSON *getRemoteConfig(void);
-cJSON *getRemoteInternalConfig(void);
 
 /* Network buffer */
 
@@ -175,24 +174,6 @@ size_t rem_getCounter(int fd);
 extern keystore keys;
 extern remoted logr;
 extern char* node_name;
-extern int timeout;
-extern int pass_empty_keyfile;
-extern int sender_pool;
-extern int rto_sec;
-extern int rto_msec;
-extern int max_attempts;
-extern int request_pool;
-extern int request_timeout;
-extern int response_timeout;
-extern int INTERVAL;
-extern rlim_t nofile;
-extern int guess_agent_group;
-extern int group_data_flush;
-extern unsigned receive_chunk;
-extern int buffer_relax;
-extern int tcp_keepidle;
-extern int tcp_keepintvl;
-extern int tcp_keepcnt;
 extern size_t global_counter;
 
 #endif /* LOGREMOTE_H */

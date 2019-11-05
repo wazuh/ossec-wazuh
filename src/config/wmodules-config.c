@@ -10,8 +10,57 @@
  */
 
 #include "wazuh_modules/wmodules.h"
+#include "wmodules-config.h"
 
 static const char *XML_NAME = "name";
+
+int Read_WModules_Config(XML_NODE node, void *d1)
+{
+    int i = 0;
+
+    wmodules_config *wm_config;
+    wm_config = (wmodules_config *)d1;
+
+    /* XML Definitions */
+    const char *xml_task_nice = "task_nice";
+    const char *xml_max_eps = "max_eps";
+    const char *xml_kill_timeout = "kill_timeout";
+    const char *xml_log_level = "log_level";
+    const char *xml_thread_stack_size = "thread_stack_size";
+
+    if (!wm_config) {
+        return (0);
+    }
+
+    if (!node)
+        return 0;
+
+    while (node[i]) {
+        if (!node[i]->element) {
+            merror(XML_ELEMNULL);
+            return (OS_INVALID);
+        } else if (!node[i]->content) {
+            merror(XML_VALUENULL, node[i]->element);
+            return (OS_INVALID);
+        } else if (strcmp(node[i]->element, xml_task_nice) == 0) {
+            SetConf(node[i]->content, &wm_cfg.task_nice, options.wazuh_modules.task_nice, xml_task_nice);
+        } else if (strcmp(node[i]->element, xml_max_eps) == 0) {
+            SetConf(node[i]->content, &wm_cfg.max_eps, options.wazuh_modules.max_eps, xml_max_eps);
+        } else if (strcmp(node[i]->element, xml_kill_timeout) == 0) {
+            SetConf(node[i]->content, &wm_cfg.kill_timeout, options.wazuh_modules.kill_timeout, xml_kill_timeout);
+        } else if (strcmp(node[i]->element, xml_log_level) == 0) {
+            SetConf(node[i]->content, &wm_cfg.log_level, options.wazuh_modules.log_level, xml_log_level);
+        } else if (strcmp(node[i]->element, xml_thread_stack_size) == 0) {
+            SetConf(node[i]->content, &wm_cfg.thread_stack_size, options.global.thread_stack_size, xml_thread_stack_size);
+        } else {
+            merror(XML_INVELEM, node[i]->element);
+            return (OS_INVALID);
+        }
+
+        i++;
+    }
+    return (0);
+}
 
 // Read wodle element
 
@@ -164,7 +213,7 @@ int Read_WModule(const OS_XML *xml, xml_node *node, void *d1, void *d2)
     return 0;
 }
 
-int Read_SCA(const OS_XML *xml, xml_node *node, void *d1)
+int Read_SCA(const OS_XML *xml, xml_node *node, void *d1, int modules)
 {
     wmodule **wmodules = (wmodule**)d1;
     wmodule *cur_wmodule;
@@ -209,7 +258,7 @@ int Read_SCA(const OS_XML *xml, xml_node *node, void *d1)
 
     //Policy Monitoring Module
     if (!strcmp(node->element, WM_SCA_CONTEXT.name)) {
-        if (wm_sca_read(xml,children, cur_wmodule) < 0) {
+        if (wm_sca_read(xml,children, cur_wmodule, modules) < 0) {
             OS_ClearNode(children);
             return OS_INVALID;
         }

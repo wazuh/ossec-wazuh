@@ -130,6 +130,23 @@ cJSON **last_summary_json = NULL;
 /* Multiple readers / one write mutex */
 static pthread_rwlock_t dump_rwlock;
 
+/* Read SCA internal options */
+static void read_internal(wm_sca_t * data)
+{
+    int aux;
+    if ((aux = getDefine_Int("sca","request_db_interval", options.sca.request_db_interval.min, options.sca.request_db_interval.max)) != INT_OPT_NDEF)
+        data->request_db_interval = aux * 60;
+    if ((aux = getDefine_Int("sca", "commands_timeout", options.sca.commands_timeout.min, options.sca.commands_timeout.max)) != INT_OPT_NDEF)
+        data->commands_timeout = aux;
+#ifdef CLIENT
+    if ((aux = getDefine_Int("sca", "remote_commands", options.sca.remote_commands.min, options.sca.remote_commands.max)) != INT_OPT_NDEF)
+        data->remote_commands = aux;
+#else
+    data->remote_commands = 1;  // Only for agents
+#endif
+    return;
+}
+
 // Module main function. It won't return
 void * wm_sca_main(wm_sca_t * data) {
     // If module is disabled, exit
@@ -145,24 +162,12 @@ void * wm_sca_main(wm_sca_t * data) {
         pthread_exit(NULL);
     }
 
-    data->msg_delay = 1000000 / wm_max_eps;
+    data->msg_delay = 1000000 / wm_cfg.max_eps;
     data->summary_delay = 3; /* Seconds to wait for summary sending */
     data_win = data;
 
     /* Reading the internal options */
-
-    // Default values
-    data->request_db_interval = 300;
-    data->remote_commands = 0;
-    data->commands_timeout = 30;
-
-    data->request_db_interval = getDefine_Int("sca","request_db_interval", 1, 60) * 60;
-    data->commands_timeout = getDefine_Int("sca", "commands_timeout", 1, 300);
-#ifdef CLIENT
-    data->remote_commands = getDefine_Int("sca", "remote_commands", 0, 1);
-#else
-    data->remote_commands = 1;  // Only for agents
-#endif
+    read_internal(data);
 
     /* Maximum request interval is the scan interval */
     if(data->request_db_interval > data->interval) {
@@ -225,8 +230,8 @@ void * wm_sca_main(wm_sca_t * data) {
     w_rwlock_init(&dump_rwlock, NULL);
 
 #ifndef WIN32
-    w_create_thread(wm_sca_request_thread, data);
-    w_create_thread(wm_sca_dump_db_thread, data);
+    w_create_thread(wm_sca_request_thread, data, wm_cfg.thread_stack_size);
+    w_create_thread(wm_sca_dump_db_thread, data, wm_cfg.thread_stack_size);
 #else
     w_create_thread(NULL,
                     0,
@@ -1147,10 +1152,10 @@ static int wm_sca_do_scan(cJSON *checks, OSStore *vars, wm_sca_t * data, int id,
                 char *f_value = value;
 
                 if (!data->remote_commands && remote_policy) {
-                    mwarn("Ignoring check for policy '%s'. The internal option 'sca.remote_commands' is disabled.", cJSON_GetObjectItem(policy, "name")->valuestring);
+                    mwarn("Ignoring check for policy '%s'. The option 'sca.remote_commands' is disabled.", cJSON_GetObjectItem(policy, "name")->valuestring);
                     if (reason == NULL) {
                         os_malloc(OS_MAXSTR, reason);
-                        sprintf(reason,"Ignoring check for running command '%s'. The internal option 'sca.remote_commands' is disabled", f_value);
+                        sprintf(reason,"Ignoring check for running command '%s'. The option 'sca.remote_commands' is disabled", f_value);
                     }
                     found = RETURN_INVALID;
                 } else {
@@ -3131,6 +3136,9 @@ cJSON *wm_sca_dump(const wm_sca_t *data) {
     cJSON_AddStringToObject(wm_wd, "skip_nfs", data->skip_nfs ? "yes" : "no");
     if (data->interval) cJSON_AddNumberToObject(wm_wd, "interval", data->interval);
     if (data->scan_day) cJSON_AddNumberToObject(wm_wd, "day", data->scan_day);
+    cJSON_AddNumberToObject(wm_wd, "request_db_interval", data->request_db_interval);
+    cJSON_AddNumberToObject(wm_wd, "commands_timeout", data->commands_timeout);
+    cJSON_AddStringToObject(wm_wd, "remote_commands", data->remote_commands ? "yes" : "no");
 
     switch (data->scan_wday) {
         case 0:

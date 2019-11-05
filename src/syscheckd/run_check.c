@@ -135,7 +135,7 @@ void start_daemon()
 
 #ifndef WIN32
     /* Launch rootcheck thread */
-    w_create_thread(w_rootcheck_thread,&syscheck);
+    w_create_thread(w_rootcheck_thread, &syscheck, syscheck.thread_stack_size);
 #else
     w_create_thread(NULL,
                     0,
@@ -634,18 +634,17 @@ void log_realtime_status(int next) {
 
 void symlink_checker_init() {
 #ifndef WIN32
-    w_create_thread(symlink_checker_thread, NULL);
+    w_create_thread(symlink_checker_thread, NULL, syscheck.thread_stack_size);
 #endif
 }
 
 #ifndef WIN32
 static void *symlink_checker_thread(__attribute__((unused)) void * data) {
-    int checker_sleep = getDefine_Int("syscheck", "symlink_scan_interval", 1, 2592000);
+    int checker_sleep = syscheck.sym_checker_interval;
     int i;
     char *real_path;
     char *conv_link;
 
-    syscheck.sym_checker_interval = checker_sleep;
     mdebug1(FIM_LINKCHECK_START, checker_sleep);
 
     while (1) {

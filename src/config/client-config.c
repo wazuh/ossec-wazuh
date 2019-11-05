@@ -40,6 +40,22 @@ int Read_Client(const OS_XML *xml, XML_NODE node, void *d1, __attribute__((unuse
     const char *xml_client_port = "port";
     const char *xml_protocol = "protocol";
 
+    /* Internal options */
+    const char *xml_state_interval = "state_interval";
+    const char *xml_recv_timeout = "recv_timeout";
+    const char *xml_remote_conf = "remote_conf";
+    const char *xml_log_level = "log_level";
+    const char *xml_recv_counter_flush = "recv_counter_flush";
+    const char *xml_comp_average_printout = "comp_avg_printout";
+    const char *xml_verify_msg_id = "verify_msg_id";
+    const char *xml_max_attempts = "max_attempts";
+    const char *xml_thread_stack_size = "thread_stack_size";
+    /* Request block */
+    const char *xml_request = "request";
+    const char *xml_request_pool = "pool";
+    const char *xml_request_rto_sec = "rto_sec";
+    const char *xml_request_rto_msec = "rto_msec";
+
     agent * logr = (agent *)d1;
     logr->notify_time = 0;
     logr->max_time_reconnect_try = 0;
@@ -165,12 +181,52 @@ int Read_Client(const OS_XML *xml, XML_NODE node, void *d1, __attribute__((unuse
             if(strcmp(node[i]->content, "blowfish") == 0){
                 logr->crypto_method = W_METH_BLOWFISH;
             }
-            else if(strcmp(node[i]->content, "aes") == 0){
+            else if (strcmp(node[i]->content, "aes") == 0){
                 logr->crypto_method = W_METH_AES;
-            }else{
+            } else {
                 merror(XML_VALUEERR, node[i]->element, node[i]->content);
                 return (OS_INVALID);
             }
+        } else if (strcmp(node[i]->element, xml_state_interval) == 0) {
+            SetConf(node[i]->content, &logr->state_interval, options.client.state_interval, xml_state_interval);
+        } else if (strcmp(node[i]->element, xml_recv_timeout) == 0) {
+            SetConf(node[i]->content, &logr->recv_timeout, options.client.recv_timeout, xml_recv_timeout);
+        } else if (strcmp(node[i]->element, xml_remote_conf) == 0) {
+            SetConf(node[i]->content, (int *) &logr->flags.remote_conf, options.client.remote_conf, xml_remote_conf);
+        } else if (strcmp(node[i]->element, xml_log_level) == 0) {
+            SetConf(node[i]->content, &logr->log_level, options.client.log_level, xml_log_level);
+        } else if (strcmp(node[i]->element, xml_recv_counter_flush) == 0) {
+            SetConf(node[i]->content, &logr->recv_counter_flush, options.client.recv_counter_flush, xml_recv_counter_flush);
+        } else if (strcmp(node[i]->element, xml_comp_average_printout) == 0) {
+            SetConf(node[i]->content, &logr->comp_average_printout, options.client.comp_average_printout, xml_comp_average_printout);
+        } else if (strcmp(node[i]->element, xml_verify_msg_id) == 0) {
+            SetConf(node[i]->content, &logr->verify_msg_id, options.client.verify_msg_id, xml_verify_msg_id);
+        } else if (strcmp(node[i]->element, xml_max_attempts) == 0) {
+            SetConf(node[i]->content, &logr->max_attempts, options.client.max_attempts, xml_max_attempts);
+        } else if (strcmp(node[i]->element, xml_request) == 0) {
+            /* Get children */
+            xml_node **children = NULL;
+            if (children = OS_GetElementsbyNode(xml, node[i]), !children) {
+                return OS_INVALID;
+            }
+
+            int j;
+            for (j = 0; children[j]; j++) {
+                if (!strcmp(children[j]->element, xml_request_pool)) {
+                    SetConf(node[j]->content, &logr->request_pool, options.client.request_pool, xml_request_pool);
+                } else if (!strcmp(children[j]->element, xml_request_rto_sec)) {
+                    SetConf(children[j]->content, &logr->rto_sec, options.client.request_rto_sec, xml_request_rto_sec);
+                } else if (!strcmp(children[j]->element, xml_request_rto_msec)) {
+                    SetConf(children[j]->content, &logr->rto_msec, options.client.request_rto_msec, xml_request_rto_msec);
+                } else {
+                    merror(XML_ELEMNULL);
+                    OS_ClearNode(children);
+                    return OS_INVALID;
+                }
+            }
+            OS_ClearNode(children);
+        } else if (strcmp(node[i]->element, xml_thread_stack_size) == 0) {
+            SetConf(node[i]->content, &logr->thread_stack_size, options.global.thread_stack_size, xml_thread_stack_size);
         } else {
             merror(XML_INVELEM, node[i]->element);
             return (OS_INVALID);

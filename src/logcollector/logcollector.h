@@ -32,7 +32,7 @@ int LogCollectorConfig(const char *cfgfile);
 /* Parse read config into JSON format */
 cJSON *getLocalfileConfig(void);
 cJSON *getSocketConfig(void);
-cJSON *getLogcollectorInternalOptions(void);
+cJSON *getLogcollectorOptions(void);
 
 /* Start log collector daemon */
 void LogCollectorStart(void) __attribute__((noreturn));
@@ -109,19 +109,12 @@ size_t lccom_dispatch(char * command, char ** output);
 size_t lccom_getconfig(const char * section, char ** output);
 
 /*** Global variables ***/
-extern int loop_timeout;
 extern int logr_queue;
-extern int open_file_attempts;
 extern logreader *logff;
 extern logreader_glob *globs;
 extern logsocket *logsk;
-extern int vcheck_files;
-extern int maximum_lines;
 extern logsocket default_agent;
-extern int force_reload;
-extern int reload_interval;
-extern int reload_delay;
-extern int free_excluded_files_interval;
+extern logreader_config log_config;
 
 typedef enum {
     CONTINUE_IT,
@@ -192,13 +185,5 @@ void w_create_input_threads();
 
 /* Set mutexes for each file */
 void w_set_file_mutexes();
-extern int sample_log_length;
-extern int lc_debug_level;
-extern int accept_remote;
-extern int N_INPUT_THREADS;
-extern int OUTPUT_QUEUE_SIZE;
-#ifndef WIN32
-extern rlim_t nofile;
-#endif
 
 #endif /* LOGREADER_H */

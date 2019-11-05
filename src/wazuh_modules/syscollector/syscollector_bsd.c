@@ -69,7 +69,7 @@ void sys_packages_bsd(int queue_fd, const char* LOCATION){
     char path[PATH_LENGTH];
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     mtdebug1(WM_SYS_LOGTAG, "Starting installed packages inventory.");
 
@@ -437,7 +437,7 @@ void sys_packages_bsd(int queue_fd, const char* LOCATION){
     int status;
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     mtdebug1(WM_SYS_LOGTAG, "Starting installed packages inventory.");
 
@@ -778,7 +778,7 @@ void sys_network_bsd(int queue_fd, const char* LOCATION){
     char *timestamp = w_get_timestamp(time(NULL));
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     if (random_id < 0)
         random_id = -random_id;
@@ -1373,7 +1373,7 @@ void sys_ports_mac(int queue_fd, const char* WM_SYS_LOCATION, int check_all) {
     }
 
     // Define time to sleep between messages sent
-    const int usec = 1000000 / wm_max_eps;
+    const int usec = 1000000 / wm_cfg.max_eps;
 
     mtdebug1(WM_SYS_LOGTAG, "Starting ports inventory.");
 
@@ -1531,7 +1531,7 @@ void sys_proc_mac(int queue_fd, const char* LOCATION){
     }
 
     // Define time to sleep between messages sent
-    int usec = 1000000 / wm_max_eps;
+    int usec = 1000000 / wm_cfg.max_eps;
 
     time_t now = time(NULL);
     struct tm localtm;

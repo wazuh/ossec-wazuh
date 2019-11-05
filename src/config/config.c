@@ -15,6 +15,41 @@
 #include "config.h"
 #include "../config/global-config.h"
 
+int remote_conf;
+
+/* Read remote_conf option */
+static int Read_RemoteConf(XML_NODE node, int modules)
+{
+    int i = 0, aux;
+    static const char *xml_remote_conf = "remote_conf";
+
+    /* Default value */
+    remote_conf = options.client.remote_conf.def;
+
+    /* Load from ossec.conf */
+    for (i = 0; node[i]; i++) {
+        if (!node[i]->element) {
+            merror(XML_ELEMNULL);
+            return (OS_INVALID);
+        } else if (!node[i]->content) {
+            merror(XML_VALUENULL, node[i]->element);
+            return (OS_INVALID);
+        } else if (strcmp(node[i]->element, xml_remote_conf) == 0) {
+            if (modules & CAGENT_CONFIG) {
+                mwarn("Trying to modify '%s' option from 'agent.conf'. This is not permitted.", xml_remote_conf);
+            } else {
+                SetConf(node[i]->content, &remote_conf, options.client.remote_conf, xml_remote_conf);
+            }
+        }
+    }
+
+    /* Load from internal options */
+    if ((aux = getDefine_Int("agent", "remote_conf", options.client.remote_conf.min, options.client.remote_conf.max) != INT_OPT_NDEF))
+        remote_conf = aux;
+
+    return 0;
+}
+
 /* Prototypes */
 static int read_main_elements(const OS_XML *xml, int modules,
                               XML_NODE node,
@@ -37,6 +72,7 @@ static int read_main_elements(const OS_XML *xml, int modules,
     const char *osemailalerts = "email_alerts";         /* Server Config */
     const char *osdbd = "database_output";              /* Server Config */
     const char *oscsyslogd = "syslog_output";           /* Server Config */
+    const char *oscsyslogd_config = "csyslog";          /* Server Config */
     const char *oscagentless = "agentless";             /* Server Config */
     const char *oslocalfile = "localfile";              /* Agent Config  */
     const char *osremote = "remote";                    /* Agent Config  */
@@ -54,10 +90,18 @@ static int read_main_elements(const OS_XML *xml, int modules,
     const char *oscluster = "cluster";                  /* Cluster Config */
     const char *ossocket = "socket";                    /* Socket Config */
     const char *ossca = "sca";                          /* Security Configuration Assessment */
+    const char *osmail = "mail";                        /* Mail Config */
+    const char *oslogcollector = "logcollector";        /* Logcollector Config */
+    const char *osexec = "exec";                        /* Exec Config */
+    const char *osintegrator = "integrator";            /* Integrator Config */
+    const char *osanalysis = "analysis";                /* Analysis Config */
     const char *osvulndet = "vulnerability-detector";   /* Vulnerability Detector Config */
 #ifndef WIN32
     const char *osfluent_forward = "fluent-forward";    /* Fluent forwarder */
 #endif
+    const char *oswmodules_config = "modules";    /* Wazuh Modules Config */
+    const char *oswdatabase = "database";               /* Wazuh Database Config */
+    const char *oswdownload = "download";               /* Wazuh Download Config */
 
     while (node[i]) {
         XML_NODE chld_node = NULL;
@@ -74,8 +118,16 @@ static int read_main_elements(const OS_XML *xml, int modules,
                     && (Read_Global(chld_node, d1, d2) < 0)) {
                 goto fail;
             }
+        } else if (chld_node && (strcmp(node[i]->element, osanalysis) == 0)) {
+            if ((modules & CGLOBAL) && (Read_Analysis(xml, chld_node, d1) < 0)) {
+                goto fail;
+            }
         } else if (chld_node && (strcmp(node[i]->element, osemailalerts) == 0)) {
             if ((modules & CMAIL) && (Read_EmailAlerts(chld_node, d1, d2) < 0)) {
+                goto fail;
+            }
+        } else if (chld_node && (strcmp(node[i]->element, osmail) == 0)) {
+            if ((modules & CMAIL) && (Read_Mail(chld_node, d1, d2) < 0)) {
                 goto fail;
             }
         } else if (chld_node && (strcmp(node[i]->element, osdbd) == 0)) {
@@ -84,6 +136,10 @@ static int read_main_elements(const OS_XML *xml, int modules,
             }
         } else if (chld_node && (strcmp(node[i]->element, oscsyslogd) == 0)) {
             if ((modules & CSYSLOGD) && (Read_CSyslog(chld_node, d1, d2) < 0)) {
+                goto fail;
+            }
+        } else if (chld_node && (strcmp(node[i]->element, oscsyslogd_config) == 0)) {
+            if ((modules & CSYSLOG_CONF) && (Read_CSyslog_Options(chld_node, d1) < 0)) {
                 goto fail;
             }
         } else if(chld_node && (strcmp(node[i]->element, osintegratord) == 0)) {
@@ -99,7 +155,7 @@ static int read_main_elements(const OS_XML *xml, int modules,
                 goto fail;
             }
         } else if (strcmp(node[i]->element, ossyscheck) == 0) {
-            if ((modules & CSYSCHECK) && (Read_Syscheck(xml, chld_node, d1, d2) < 0)) {
+            if ((modules & CSYSCHECK) && (Read_Syscheck(xml, chld_node, d1, d2, modules) < 0)) {
                 goto fail;
             }
             if ((modules & CGLOBAL) && (Read_GlobalSK(chld_node, d1, d2) < 0)) {
@@ -117,16 +173,23 @@ static int read_main_elements(const OS_XML *xml, int modules,
             if ((modules & CLOCALFILE) && (Read_Localfile(chld_node, d1, d2) < 0)) {
                 goto fail;
             }
+        } else if (chld_node && (strcmp(node[i]->element, oslogcollector) == 0)) {
+            if ((modules & CLOGCOLLECTOR) && (Read_Logcollector(xml, chld_node, d1, modules) < 0)) {
+                goto fail;
+            }
         } else if (chld_node && (strcmp(node[i]->element, osremote) == 0)) {
-            if ((modules & CREMOTE) && (Read_Remote(chld_node, d1, d2) < 0)) {
+            if ((modules & CREMOTE) && (Read_Remote(xml, chld_node, d1, d2) < 0)) {
                 goto fail;
             }
         } else if (chld_node && (strcmp(node[i]->element, osclient) == 0)) {
+            if (Read_RemoteConf(chld_node, modules) < 0) {
+                goto fail;
+            }
             if ((modules & CCLIENT) && (Read_Client(xml, chld_node, d1, d2) < 0)) {
                 goto fail;
             }
         } else if (strcmp(node[i]->element, osbuffer) == 0) {
-            if ((modules & CBUFFER) && (Read_ClientBuffer(chld_node, d1, d2) < 0)) {
+            if ((modules & CBUFFER) && (Read_ClientBuffer(xml, chld_node, d1, d2, modules) < 0)) {
                 goto fail;
             }
         } else if (chld_node && (strcmp(node[i]->element, oscommand) == 0)) {
@@ -146,7 +209,7 @@ static int read_main_elements(const OS_XML *xml, int modules,
                 goto fail;
             }
         } else if (strcmp(node[i]->element, ossca) == 0) {
-            if ((modules & CWMODULE) && (Read_SCA(xml, node[i], d1) < 0)) {
+            if ((modules & CWMODULE) && (Read_SCA(xml, node[i], d1, modules) < 0)) {
                 goto fail;
             }
         } else if (strcmp(node[i]->element, osvulndet) == 0) {
@@ -165,12 +228,20 @@ static int read_main_elements(const OS_XML *xml, int modules,
             }
         }
 #endif
-        else if (chld_node && (strcmp(node[i]->element, oslabels) == 0)) {
+        else if (strcmp(node[i]->element, oswmodules_config) == 0) {
+            if ((modules & CWMODULE) && (Read_WModules_Config(chld_node, d1) < 0)) {
+                goto fail;
+            }
+        } else if (strcmp(node[i]->element, oswdatabase) == 0) {
+            if ((modules & CWDATABASE) && (Read_WDatabase(xml, chld_node, d1, d2) < 0)) {
+                goto fail;
+            }
+        } else if (chld_node && (strcmp(node[i]->element, oslabels) == 0)) {
             if ((modules & CLABELS) && (Read_Labels(chld_node, d1, d2) < 0)) {
                 goto fail;
             }
         } else if (strcmp(node[i]->element, osauthd) == 0) {
-            if ((modules & CAUTHD) && (Read_Authd(chld_node, d1, d2) < 0)) {
+            if ((modules & CAUTHD) && (Read_Authd(xml, chld_node, d1, d2) < 0)) {
                 goto fail;
             }
         } else if (chld_node && strcmp(node[i]->element, oslogging) == 0) {
@@ -195,6 +266,18 @@ static int read_main_elements(const OS_XML *xml, int modules,
             }
         } else if (chld_node && (strcmp(node[i]->element, ossocket) == 0)) {
             if ((modules & CSOCKET) && (Read_Socket(chld_node, d1, d2) < 0)) {
+                goto fail;
+            }
+        } else if (chld_node && (strcmp(node[i]->element, osexec) == 0)) {
+            if ((modules & CEXEC) && (Read_Exec(chld_node, d1) < 0)) {
+                goto fail;
+            }
+        } else if (chld_node && (strcmp(node[i]->element, osintegrator) == 0)) {
+            if ((modules & CINTEGRATOR) && (Read_Integrator_Options(chld_node, d1) < 0)) {
+                goto fail;
+            }
+        } else if (chld_node && (strcmp(node[i]->element, oswdownload) == 0)) {
+            if ((modules & CWDOWNLOAD) && (Read_WDownload(chld_node, d1) < 0)) {
                 goto fail;
             }
         } else {
@@ -233,7 +316,7 @@ int ReadConfig(int modules, const char *cfgfile, void *d1, void *d2)
     const char *xml_agent_overwrite = "overwrite";
     const char *xml_agent_profile = "profile";
 
-    if ((modules & CAGENT_CONFIG) && !getDefine_Int("agent", "remote_conf", 0, 1)) {
+    if ((modules & CAGENT_CONFIG) && !remote_conf) {
       return 0;
     }
 
@@ -405,6 +488,38 @@ int ReadConfig(int modules, const char *cfgfile, void *d1, void *d2)
     return (0);
 }
 
+/* Set the value of a configuration option
+ *
+ * Arguments:
+ *
+ * c_value: the value (string) that is going to be set
+ * var: the configuration variable that it's going to be set
+ * option: settings that this options has (default value, minimum value, maximum value)
+ * name: the name of the option
+ *
+ * Returns 0 on success and -1 on error
+ *
+ */
+int SetConf(const char *c_value, int *var, const option_t option, const char *name)
+{
+    /* Check if the value set is numeric */
+    if ((strspn(c_value, "0123456789-") == strlen(c_value))) {
+        int value = atoi(c_value);
+
+        if ((value < option.min) || (value > option.max)) {
+            /* This is an invalid value */
+            merror_exit("'%s' option is being set to a value beyond or below the acceptable limits.", name);
+            return -1;
+        }
+        *var = value;
+        return 0;
+    } else {
+        /* This is an invalid value */
+        merror_exit("'%s' option is being set with an invalid value.", name);
+        return -1;
+    }
+    return 0;
+}
 int Read_RotationAnalysisd(const OS_XML *xml, XML_NODE node, void *config, __attribute__((unused)) void *config2) {
     unsigned int i = 0;
     unsigned int j = 0;

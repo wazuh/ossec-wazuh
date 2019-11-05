@@ -51,9 +51,6 @@ static char *_read_file(const char *high_name, const char *low_name, const char 
 
     fp = fopen(def_file, "r");
     if (!fp) {
-        if (strcmp(defines_file, OSSEC_LDEFINES) != 0) {
-            merror(FOPEN_ERROR, def_file, errno, strerror(errno));
-        }
         return (NULL);
     }
     w_file_cloexec(fp);
@@ -210,11 +207,7 @@ int getDefine_Int(const char *high_name, const char *low_name, int min, int max)
     if (!value) {
         value = _read_file(high_name, low_name, OSSEC_DEFINES);
         if (!value) {
-            if (!strcmp(high_name, "monitord")) {
-                return INT_OPT_NDEF;
-            } else {
-                merror_exit(DEF_NOT_FOUND, high_name, low_name);
-            }
+            return INT_OPT_NDEF;
         }
     }
 

@@ -22,7 +22,7 @@ static int enable_ca_verification = 1;
 int is_disabled;
 
 /* Read the config file */
-int ExecdConfig(const char *cfgfile)
+int ExecdConfig(const char *cfgfile, ExecConfig *cfg)
 {
     is_disabled = 0;
 
@@ -36,6 +36,13 @@ int ExecdConfig(const char *cfgfile)
     int i = 0;
 
     OS_XML xml;
+
+    int modules = 0;
+    modules |= CEXEC;
+
+    if (ReadConfig(modules, cfgfile, cfg, NULL) < 0) {
+        return (OS_INVALID);
+    }
 
     /* Read XML file */
     if (OS_ReadXML(cfgfile, &xml) < 0)
@@ -250,17 +257,17 @@ cJSON *getARConfig(void) {
 }
 
 
-cJSON *getExecdInternalOptions(void) {
+cJSON *getExecdOptions(void) {
 
     cJSON *root = cJSON_CreateObject();
-    cJSON *internals = cJSON_CreateObject();
     cJSON *execd = cJSON_CreateObject();
 
-    cJSON_AddNumberToObject(execd,"request_timeout",req_timeout);
-    cJSON_AddNumberToObject(execd,"max_restart_lock",max_restart_lock);
+    cJSON_AddNumberToObject(execd, "request_timeout", exec_config.req_timeout);
+    cJSON_AddNumberToObject(execd, "max_restart_lock", exec_config.max_restart_lock);
+    cJSON_AddNumberToObject(execd, "log_level", exec_config.log_level);
+    cJSON_AddNumberToObject(execd, "thread_stack_size", exec_config.thread_stack_size);
 
-    cJSON_AddItemToObject(internals,"execd",execd);
-    cJSON_AddItemToObject(root,"internal",internals);
+    cJSON_AddItemToObject(root, "exec", execd);
 
     return root;
 }

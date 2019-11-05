@@ -17,11 +17,8 @@
 #define ARGV0 "ossec-agentd"
 #endif
 
-int agent_debug_level;
-
 /* Prototypes */
 static void help_agentd(void) __attribute((noreturn));
-
 
 /* Print help statement */
 static void help_agentd()
@@ -49,7 +46,6 @@ int main(int argc, char **argv)
     int c = 0;
     int test_config = 0;
     int debug_level = 0;
-    agent_debug_level = getDefine_Int("agent", "debug", 0, 2);
 
     const char *dir = DEFAULTDIR;
     const char *user = USER;
@@ -119,21 +115,29 @@ int main(int argc, char **argv)
         merror_exit(MEM_ERROR, errno, strerror(errno));
     }
 
+    /* Read config */
+    if (ClientConf(cfg) < 0) {
+        merror_exit(CLIENT_ERROR);
+    }
+
+    _s_comp_print = agt->comp_average_printout;
+    _s_recv_flush = agt->recv_counter_flush;
+    _s_verify_counter = agt->verify_msg_id;
+
+    if (agt->normal_level > agt->warn_level-1) {
+        merror_exit("The value of option 'normal_level' must be 'warn_level-1' at most");
+    }
+
     /* Check current debug_level
      * Command line setting takes precedence
      */
     if (debug_level == 0) {
         /* Get debug level */
-        debug_level = agent_debug_level;
+        debug_level = agt->log_level;
         while (debug_level != 0) {
             nowDebug();
             debug_level--;
         }
-    }
-
-    /* Read config */
-    if (ClientConf(cfg) < 0) {
-        merror_exit(CLIENT_ERROR);
     }
 
     if (!(agt->server && agt->server[0].rip)) {

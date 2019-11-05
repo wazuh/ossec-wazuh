@@ -71,13 +71,28 @@ static int is_policy_old (char * const file_list[], const size_t file_list_len, 
     return NULL != find_string_in_array(file_list, file_list_len, policy_filename, strlen(policy_filename));
 }
 
+static const char *XML_REQUEST_DB_INTERVAL = "request_db_interval";
+/* Commands block */
+static const char *XML_COMMAND = "commands";
+static const char *XML_REMOTE = "remote";
+static const char *XML_TIMEOUT = "timeout";
+
+/* Set SCA options to default */
+static void init_conf(wm_sca_t *sca)
+{
+    sca->request_db_interval = options.sca.request_db_interval.def * 60;
+    sca->remote_commands = options.sca.remote_commands.def;
+    sca->commands_timeout = options.sca.commands_timeout.def;
+    return;
+}
+
 static short eval_bool(const char *str)
 {
     return !str ? OS_INVALID : !strcmp(str, "yes") ? 1 : !strcmp(str, "no") ? 0 : OS_INVALID;
 }
 
 // Reading function
-int wm_sca_read(const OS_XML *xml,xml_node **nodes, wmodule *module)
+int wm_sca_read(const OS_XML *xml,xml_node **nodes, wmodule *module, __attribute__((unused)) int modules)
 {
     unsigned int i;
     int month_interval = 0;
@@ -98,6 +113,7 @@ int wm_sca_read(const OS_XML *xml,xml_node **nodes, wmodule *module)
         module->context = &WM_SCA_CONTEXT;
         module->tag = strdup(module->context->name);
         module->data = sca;
+        init_conf(sca);
         policies_count = 0;
     }
 
@@ -404,6 +420,43 @@ int wm_sca_read(const OS_XML *xml,xml_node **nodes, wmodule *module)
             }
 
             sca->skip_nfs = skip_nfs;
+        }
+        else if (!strcmp(nodes[i]->element, XML_REQUEST_DB_INTERVAL))
+        {
+            SetConf(nodes[i]->content, (int *) &sca->request_db_interval, options.sca.request_db_interval,  XML_REQUEST_DB_INTERVAL);
+            sca->request_db_interval = sca->request_db_interval * 60;
+        }
+        else if (!strcmp(nodes[i]->element, XML_COMMAND))
+        {
+            /* Get children */
+            xml_node **children = NULL;
+            if (children = OS_GetElementsbyNode(xml, nodes[i]), !children) {
+                return OS_INVALID;
+            }
+
+            int  j;
+            for (j = 0; children[j]; j++) {
+                if (strcmp(children[j]->element, XML_REMOTE) == 0) {
+#ifdef CLIENT
+                    if (modules & CAGENT_CONFIG) {
+                        mwarn("Trying to set '%s' option from 'agent.conf'. This is not permitted.", XML_REMOTE);
+                    } else {
+                        int aux;
+                        SetConf(children[j]->content, &aux, options.sca.remote_commands, XML_REMOTE);
+                        sca->remote_commands = aux;
+                    }
+#else
+                    sca->remote_commands = 1;
+#endif
+                } else if (strcmp(children[j]->element, XML_TIMEOUT) == 0) {
+                    SetConf(children[j]->content, &sca->commands_timeout, options.sca.commands_timeout, XML_TIMEOUT);
+                } else {
+                    merror(XML_ELEMNULL);
+                    OS_ClearNode(children);
+                    return OS_INVALID;
+                }
+            }
+            OS_ClearNode(children);
         }
         else
         {

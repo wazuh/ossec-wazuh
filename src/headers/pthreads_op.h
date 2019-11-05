@@ -12,7 +12,7 @@
 #define PTHREADS_OP_H
 
 #ifndef WIN32
-#define w_create_thread(x, y) if (!CreateThread((void * (*) (void *))x, y)) merror_exit(THREAD_ERROR);
+#define w_create_thread(x, y, z) if (!CreateThread((void * (*) (void *))x, y, z)) merror_exit(THREAD_ERROR);
 #else
 #define w_create_thread(x, y, z, a, b, c) ({HANDLE hd; if (!(hd = CreateThread(x,y,z,a,b,c))) merror_exit(THREAD_ERROR); hd;})
 #endif
@@ -33,8 +33,8 @@
 #define w_mutexattr_destroy(x) { int error = pthread_mutexattr_destroy(x); if (error) merror_exit("At pthread_mutexattr_destroy(): %s", strerror(error)); }
 
 #ifndef WIN32
-int CreateThread(void * (*function_pointer)(void *), void * data) __attribute__((nonnull(1)));
-int CreateThreadJoinable(pthread_t *lthread, void * (*function_pointer)(void *), void *data);
+int CreateThread(void * (*function_pointer)(void *), void * data, int thread_stack_size) __attribute__((nonnull(1)));
+int CreateThreadJoinable(pthread_t *lthread, void * (*function_pointer)(void *), void *data, int thread_stack_size);
 #endif
 
 #endif

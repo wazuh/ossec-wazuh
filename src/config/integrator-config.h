@@ -34,4 +34,11 @@ typedef struct _IntegratorConfig
     OSMatch *location;
 }IntegratorConfig;
 
-#endif /* CINTEGRATORCONFIG_H */
+/* Integrator Options Structure (common options) */
+typedef struct _IntegratorOptions
+{
+    int log_level;
+    int thread_stack_size;
+} IntegratorOptions;
+
+#endif
