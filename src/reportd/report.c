@@ -9,10 +9,11 @@
  */
 
 #include "shared.h"
+#include "config/config.h"
+#include "config/reports-config.h"
 
 /* Prototypes */
 static void help_reportd(void) __attribute__((noreturn));
-
 
 /* Print help statement */
 static void help_reportd()
@@ -28,6 +29,8 @@ static void help_reportd()
     print_out("    -t          Test configuration");
     print_out("    -n          Create description for the report");
     print_out("    -s          Show the alert dump");
+    print_out("    -S <source> Set report source");
+    print_out("    Sources allowed: log, json");
     print_out("    -u <user>   User to run as (default: %s)", USER);
     print_out("    -g <group>  Group to run as (default: %s)", GROUPGLOBAL);
     print_out("    -D <dir>    Directory to chroot into (default: %s)", DEFAULTDIR);
@@ -45,7 +48,7 @@ static void help_reportd()
 
 int main(int argc, char **argv)
 {
-    int c, test_config = 0;
+    int c, test_config = 0, s = 0;
     uid_t uid;
     gid_t gid;
     const char *dir  = DEFAULTDIR;
@@ -57,32 +60,24 @@ int main(int argc, char **argv)
 
     const char *related_of = NULL;
     const char *related_values = NULL;
-    report_filter r_filter;
+    monitor_config *mon_config;
 
     /* Set the name */
     OS_SetName(ARGV0);
 
-    r_filter.group = NULL;
-    r_filter.rule = NULL;
-    r_filter.level = NULL;
-    r_filter.location = NULL;
-    r_filter.srcip = NULL;
-    r_filter.user = NULL;
-    r_filter.files = NULL;
-    r_filter.show_alerts = 0;
+    os_calloc(1, sizeof(monitor_config), mon_config);
 
-    r_filter.related_group = 0;
-    r_filter.related_rule = 0;
-    r_filter.related_level = 0;
-    r_filter.related_location = 0;
-    r_filter.related_srcip = 0;
-    r_filter.related_user = 0;
-    r_filter.related_file = 0;
+    ReadConfig(CREPORTS, DEFAULTCPATH, mon_config, NULL);
 
-    r_filter.report_type = 0;
-    r_filter.report_name = NULL;
+    /* Get any configured entry */
+    if (!mon_config->reports) {
+        os_calloc(1, 2 * sizeof(report_config *), mon_config->reports);
+        os_calloc(1, sizeof(report_config), mon_config->reports[s]);
 
-    while ((c = getopt(argc, argv, "Vdhstu:g:D:f:v:n:r:")) != -1) {
+        mon_config->reports[s]->r_filter.report_type = 0;
+    }
+
+    while ((c = getopt(argc, argv, "Vdhstu:g:D:f:v:n:r:S:")) != -1) {
         switch (c) {
             case 'V':
                 print_version();
@@ -97,7 +92,7 @@ int main(int argc, char **argv)
                 if (!optarg) {
                     merror_exit("-n needs an argument");
                 }
-                r_filter.report_name = optarg;
+                mon_config->reports[s]->r_filter.report_name = optarg;
                 break;
             case 'r':
                 if (!optarg || !argv[optind]) {
@@ -107,7 +102,7 @@ int main(int argc, char **argv)
                 related_values = argv[optind];
 
                 if (os_report_configfilter(related_of, related_values,
-                                           &r_filter, REPORT_RELATED)) {
+                                           &(mon_config->reports[s]->r_filter), REPORT_RELATED)) {
                     merror_exit(CONFIG_ERROR, "user argument");
                 }
                 optind++;
@@ -120,7 +115,7 @@ int main(int argc, char **argv)
                 filter_value = argv[optind];
 
                 if (os_report_configfilter(filter_by, filter_value,
-                                           &r_filter, REPORT_FILTER)) {
+                                           &(mon_config->reports[s]->r_filter), REPORT_FILTER)) {
                     merror_exit(CONFIG_ERROR, "user argument");
                 }
                 optind++;
@@ -147,13 +142,26 @@ int main(int argc, char **argv)
                 test_config = 1;
                 break;
             case 's':
-                r_filter.show_alerts = 1;
+                mon_config->reports[s]->r_filter.show_alerts = 1;
+                break;
+            case 'S':
+                if (!optarg) {
+                    merror_exit("-S needs an argument");
+                }
+                if (strncmp(optarg, "log", 3) == 0) {
+                    mon_config->reports[s]->r_filter.report_log_source = REPORT_SOURCE_LOG;
+                }
+                else if (strncmp(optarg, "json", 4) == 0) {
+                    mon_config->reports[s]->r_filter.report_log_source = REPORT_SOURCE_JSON;
+                }
+                else {
+                    merror_exit("-S invalid argument. Options are 'log' or 'json'");
+                }
                 break;
             default:
                 help_reportd();
                 break;
         }
-
     }
 
     /* Start daemon */
@@ -201,7 +209,7 @@ int main(int argc, char **argv)
     minfo(STARTUP_MSG, (int)getpid());
 
     /* The real stuff now */
-    os_ReportdStart(&r_filter);
+    os_ReportdStart(&(mon_config->reports[s]->r_filter));
 
     exit(0);
 }

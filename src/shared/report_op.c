@@ -379,8 +379,7 @@ void os_report_printtop(void *topstore_pt, const char *hname, int print_related)
     return;
 }
 
-void os_ReportdStart(report_filter *r_filter)
-{
+void os_ReportdStart(report_filter *r_filter){
     int alerts_processed = 0;
     int alerts_filtered = 0;
     char *first_alert = NULL;
@@ -409,7 +408,8 @@ void os_ReportdStart(report_filter *r_filter)
         if (r_filter->fp) {
             __g_rtype = r_filter->fp;
         }
-    } else {
+    }
+    else {
         fileq->fp = stdin;
     }
 
@@ -451,14 +451,34 @@ void os_ReportdStart(report_filter *r_filter)
         goto cleanup;
     }
 
+    /* Initialize file queue */
+    switch (r_filter->report_log_source) {
+        case REPORT_SOURCE_LOG:
+            minfo("Getting alerts in log format.");
+            Init_FileQueue(fileq, &tm_result, CRALERT_READ_ALL | CRALERT_FP_SET);
+            break;
 
+        case REPORT_SOURCE_JSON:
+            minfo("Getting alerts in JSON format.");
+            Init_JsonQueue(fileq, &tm_result, CRALERT_READ_ALL | CRALERT_FP_SET);
+            break;
 
-    Init_FileQueue(fileq, &tm_result, CRALERT_READ_ALL | CRALERT_FP_SET);
+        default:
+            merror_exit("At OS_Run(): invalid source.");
+    }
 
     /* Read the alerts */
     while (1) {
         /* Get message if available */
-        al_data = Read_FileMon(fileq, &tm_result, 1);
+        switch (r_filter->report_log_source) {
+            case REPORT_SOURCE_LOG:
+                al_data = Read_FileMon(fileq, &tm_result, 1);
+                break;
+            case REPORT_SOURCE_JSON:
+                al_data = Read_JSON_Mon(fileq, &tm_result, 1);
+                break;
+        }
+
         if (!al_data) {
             break;
         }
@@ -553,8 +573,6 @@ void os_ReportdStart(report_filter *r_filter)
         }
     }
 
-
-
     /* No report available */
     if (alerts_filtered == 0) {
         if (!r_filter->report_name) {
@@ -562,6 +580,11 @@ void os_ReportdStart(report_filter *r_filter)
         } else {
             minfo("Report '%s' completed and zero alerts post-filter.", r_filter->report_name);
         }
+
+        minfo("'%s' is configured to be the source of the report.",
+                r_filter->report_log_source == REPORT_SOURCE_LOG ? "alerts.log" : "alerts.json");
+
+        minfo("Please, check that the provided file is the correct one.");
 
         goto cleanup;
     }
@@ -640,14 +663,20 @@ void os_ReportdStart(report_filter *r_filter)
             l_print_out("Log dump:");
             l_print_out("------------------------------------------------");
         }
+
         while (data_to_clean[i]) {
             alert_data *md = data_to_clean[i];
-            if (r_filter->show_alerts) {
-                l_print_out("%s %s\nRule: %d (level %d) -> '%s'\n%s\n\n", md->date, md->location, md->rule, md->level, md->comment, md->log[0]);
+
+            if (r_filter->show_alerts && md->log) {
+                l_print_out("%s %s\nRule: %d (level %d) -> '%s'\n%s\n\n",
+                            md->date, md->location, md->rule, md->level, md->comment, md->log[0]);
             }
+
             FreeAlertData(md);
+
             i++;
         }
+
         free(data_to_clean);
         data_to_clean = NULL;
     }
