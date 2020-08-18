@@ -2,7 +2,18 @@
 # Copyright (C) 2015-2020, Wazuh Inc.
 # Author: Gianni D'Aprile
 
-GREP=`which grep`
+# Aux function to replace which command.
+find_path () {
+    IFS=":"
+    for PART in $PATH; do
+        if test -x "$PART/$1"; then
+            echo $PART/$1
+	    break
+        fi
+    done
+}
+
+GREP=$(find_path grep)
 
 ACTION=$1
 USER=$2
