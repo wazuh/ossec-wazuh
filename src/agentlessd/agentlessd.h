@@ -18,6 +18,7 @@
 #endif
 
 /** Prototypes **/
+void delete_agentless(void);
 
 /* Main monitord */
 void Agentlessd(void) __attribute__((noreturn));

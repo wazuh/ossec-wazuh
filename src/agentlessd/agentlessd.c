@@ -21,12 +21,12 @@ static int  gen_diff_alert(const char *host, const char *script, time_t alert_di
 static int  check_diff_file(const char *host, const char *script);
 static FILE *open_diff_file(const char *host, const char *script);
 static int  run_periodic_cmd(agentlessd_entries *entry, int test_it);
+static int  w_remove_agentless_entry(const char * script);
 
 /* Global variables */
 agentlessd_config lessdc;
 
 static const char *STR_MORE_CHANGES = "More changes...";
-
 
 /* Save agentless entry for the control tools to gather */
 static int save_agentless_entry(const char *host, const char *script, const char *agttype)
@@ -47,6 +47,24 @@ static int save_agentless_entry(const char *host, const char *script, const char
     }
 
     return (0);
+}
+
+/* Remove agentless entry Returns 0 on success or -1 on error.*/ 
+int w_remove_agentless_entry(const char * script){
+    int ret;
+    char sys_location[1024 + 1];
+
+    sys_location[1024] = '\0';
+    snprintf(sys_location, 1024, "%s/%s",
+            AGENTLESS_ENTRYDIRPATH, script);
+    
+    ret = unlink(sys_location);
+    if(ret != 0){
+        merror(UNLINK_ERROR,sys_location,errno, strerror(errno));
+        return -1;
+    }else{
+        return 0;
+    }
 }
 
 /* Send integrity checking message */
@@ -462,6 +480,9 @@ void Agentlessd()
     // Start com request thread
     w_create_thread(lessdcom_main, NULL);
 
+    // Delete agentless if are not in the configuration
+    delete_agentless();
+    
     /* Main monitor loop */
     while (1) {
         unsigned int i = 0;
@@ -536,4 +557,40 @@ cJSON *getAgentlessConfig(void) {
     cJSON_AddItemToObject(root,"agentless",agent_list);
 
     return root;
+}
+
+void delete_agentless(){
+    DIR *dirp;
+    struct dirent *dp;
+    unsigned int i, j,n;
+    char name [1024 +1];
+    const char * path = AGENTLESS_ENTRYDIRPATH;
+    int state=0;
+
+    dirp = opendir(path);
+    if (dirp) {
+        while ((dp = readdir(dirp)) != NULL) {
+            if (strncmp(dp->d_name, ".", 1) == 0) {
+                continue;
+            }  
+            i=0;
+            while(lessdc.entries[i]){
+                for (j=0;lessdc.entries[i]->server[j];j++) {
+                    snprintf(name, 1024, "(%s)%s", lessdc.entries[i]->type, lessdc.entries[i]->server[j]);
+                    n =strlen(lessdc.entries[i]->type) + strlen(lessdc.entries[i]->server[j]) +2;
+                    if (strncmp(name, dp->d_name, n)==0){
+                        state=1;
+                    }
+                }
+                i++;
+            }
+            if (!state){
+                w_remove_agentless_entry(dp->d_name);
+            }
+            else{
+                state=0;
+            }
+        }
+        closedir(dirp);
+    }
 }
