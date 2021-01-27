@@ -20,6 +20,8 @@ static int process_option_regex(char *option, OSMatch ***syscheck_option, xml_no
 static void process_option(char ***syscheck_option, xml_node *node);
 /* Set check_all options in a directory/file */
 static void fim_set_check_all(int *opt);
+/* Extracts an integer value from an xml element */
+static int get_xml_int(xml_node *node, int min, int max, int default_value);
 
 
 void organize_syscheck_dirs(syscheck_config *syscheck)
@@ -754,7 +756,7 @@ static int read_attr(syscheck_config *syscheck, const char *dirs, char **g_attrs
 
     /* Variables for extract options */
     char *restrictfile = NULL;
-    int recursion_limit = syscheck->max_depth;
+    int recursion_limit = -1;   // Set the default recursion level after reading all configuration files
     char *tag = NULL;
     char *clean_tag = NULL;
     char **attrs = g_attrs;
@@ -973,13 +975,11 @@ static int read_attr(syscheck_config *syscheck, const char *dirs, char **g_attrs
                 merror(XML_VALUEERR, xml_recursion_level, *values);
                 goto out_free;
             }
+
             recursion_limit = (unsigned int) atoi(*values);
-            if (recursion_limit < 0) {
-                mwarn("Invalid recursion level value: %d. Setting default (%d).", recursion_limit, syscheck->max_depth);
-                recursion_limit = syscheck->max_depth;
-            } else if (recursion_limit > MAX_DEPTH_ALLOWED) {
+            if (recursion_limit > MAX_DEPTH_ALLOWED) {
                 mwarn("Recursion level '%d' exceeding limit. Setting %d.", recursion_limit, MAX_DEPTH_ALLOWED);
-                recursion_limit = syscheck->max_depth;
+                recursion_limit = -1;
             }
         }
         /* Check tag */
@@ -1756,6 +1756,12 @@ int Read_Syscheck(const OS_XML *xml, XML_NODE node, void *configp, __attribute__
     const char *xml_max_eps = "max_eps";
     const char *xml_allow_remote_prefilter_cmd = "allow_remote_prefilter_cmd";
     const char *xml_diff = "diff";
+    const char *xml_rt_delay = "rt_delay";
+    const char *xml_default_max_depth = "default_max_depth";
+    const char *xml_file_max_size = "file_max_size";
+    const char *xml_symlink_scan_interval = "symlink_scan_interval";
+    const char *xml_max_audit_entries = "max_audit_entries";
+    const char *xml_max_fd_win_rt = "max_fd_win_rt";
 
     /* Configuration example
         <directories check_all="yes">/etc,/usr/bin</directories>
@@ -2157,6 +2163,10 @@ int Read_Syscheck(const OS_XML *xml, XML_NODE node, void *configp, __attribute__
                         OS_ClearNode(children);
                         return(OS_INVALID);
                     }
+                } else if (strcmp(children[j]->element, xml_max_audit_entries) == 0) {
+#ifndef WIN32
+                    syscheck->max_audit_entries = get_xml_int(children[j], 1, 256, 256);
+#endif
                 } else if (strcmp(children[j]->element, xml_restart_audit) == 0) {
                     if(strcmp(children[j]->content, "yes") == 0)
                         syscheck->restart_audit = 1;
@@ -2231,6 +2241,18 @@ int Read_Syscheck(const OS_XML *xml, XML_NODE node, void *configp, __attribute__
                 merror(XML_VALUEERR,node[i]->element,node[i]->content);
                 return(OS_INVALID);
             }
+        } else if (strcmp(node[i]->element, xml_rt_delay) == 0) {
+            syscheck->rt_delay = get_xml_int(node[i], 0, 1000, 5);
+        } else if (strcmp(node[i]->element, xml_default_max_depth) == 0) {
+            syscheck->max_depth = get_xml_int(node[i], 1, 320, 256);
+        } else if (strcmp(node[i]->element, xml_symlink_scan_interval) == 0) {
+            syscheck->sym_checker_interval = get_xml_int(node[i], 1, 2592000, 600);
+        } else if (strcmp(node[i]->element, xml_max_fd_win_rt) == 0) {
+#ifdef WIN32
+            syscheck->max_fd_win_rt = get_xml_int(node[i], 1, 1024, 256);
+#endif
+        } else if (strcmp(node[i]->element, xml_file_max_size) == 0) {
+            syscheck->file_max_size = (size_t)get_xml_int(node[i], 0, 4095, 1024) * 1024UL * 1024UL;
         } else {
             mwarn(XML_INVELEM, node[i]->element);
         }
@@ -2614,4 +2636,23 @@ static void fim_set_check_all(int *opt) {
 #ifdef WIN32
     *opt |= CHECK_ATTRS;
 #endif
+}
+
+static int get_xml_int(xml_node *node, int min, int max, int default_value) {
+    int retval = 0;
+
+    if (OS_StrIsNum(node->content) == FALSE) {
+        mwarn(FIM_CONFIG_DEFAULT, node->content, node->element, default_value);
+        return default_value;
+    }
+
+    retval = atol(node->content);
+
+    // Check if strtol failed or the returned value is out of bounds.
+    if (retval < min || retval > max) {
+        mwarn(FIM_CONFIG_DEFAULT, node->content, node->element, default_value);
+        return default_value;
+    }
+
+    return retval;
 }

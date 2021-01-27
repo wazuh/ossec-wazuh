@@ -61,7 +61,7 @@ int Read_Syscheck_Config(const char *cfgfile)
     syscheck.key_ignore_regex = NULL;
     syscheck.value_ignore = NULL;
     syscheck.value_ignore_regex = NULL;
-    syscheck.max_fd_win_rt  = 0;
+    syscheck.max_fd_win_rt  = 256;
     syscheck.registry_nodiff = NULL;
     syscheck.registry_nodiff_regex = NULL;
     syscheck.enable_registry_synchronization = 1;
@@ -82,6 +82,11 @@ int Read_Syscheck_Config(const char *cfgfile)
     syscheck.comp_estimation_perc = 0.9;    // 90%
     syscheck.disk_quota_full_msg = true;
     syscheck.audit_key = NULL;
+    syscheck.rt_delay = 5;
+    syscheck.max_depth = 256;
+    syscheck.file_max_size = 1024UL * 1024UL * 1024UL;
+    syscheck.sym_checker_interval = 600;
+    syscheck.max_audit_entries = 256;
 
     mdebug1(FIM_CONFIGURATION_FILE, cfgfile);
 
@@ -98,21 +103,20 @@ int Read_Syscheck_Config(const char *cfgfile)
     ReadConfig(modules, AGENTCONFIG, &syscheck, NULL);
 #endif
 
-    // Check directories options to determine whether to start the whodata thread or not
+    // Do some last minute adjustments to the configuration.
     if (syscheck.dir) {
         for (it = 0; syscheck.dir[it]; it++) {
+            // Check directories options to determine whether to start the whodata thread or not
             if (syscheck.opts[it] & WHODATA_ACTIVE) {
                 syscheck.enable_whodata = 1;
-
-                break;  // Exit loop with the first whodata directory
             }
-        }
-    }
 
-    if (syscheck.diff_size_limit) {
-        for (it = 0; syscheck.diff_size_limit[it]; it++) {
             if (syscheck.diff_size_limit[it] == -1) {
                 syscheck.diff_size_limit[it] = syscheck.file_size_limit;
+            }
+
+            if (syscheck.recursion_level[it] == -1) {
+                syscheck.recursion_level[it] = syscheck.max_depth;
             }
         }
     }
@@ -153,7 +157,6 @@ int Read_Syscheck_Config(const char *cfgfile)
     if ((syscheck.dir[0] == NULL) && (syscheck.registry[0].entry == NULL)) {
         return (1);
     }
-    syscheck.max_fd_win_rt = getDefine_Int("syscheck", "max_fd_win_rt", 1, 1024);
 #endif
 
     return (0);
@@ -305,11 +308,16 @@ cJSON *getSyscheckConfig(void) {
     } else {
         cJSON_AddStringToObject(whodata,"startup_healthcheck","no");
     }
+
+    cJSON_AddNumberToObject(whodata, "max_audit_entries", syscheck.max_audit_entries);
+
     cJSON_AddItemToObject(syscfg,"whodata",whodata);
 #endif
 
 #ifdef WIN32
     cJSON_AddNumberToObject(syscfg, "windows_audit_interval", syscheck.wdata.interval_scan);
+
+    cJSON_AddNumberToObject(syscfg, "max_fd_win_rt", syscheck.max_fd_win_rt);
 
     if (syscheck.registry) {
         cJSON *rg = cJSON_CreateArray();
@@ -500,6 +508,10 @@ cJSON *getSyscheckConfig(void) {
     // Add sql database information
     cJSON_AddStringToObject(syscfg, "database", syscheck.database_store ? "memory" : "disk");
 
+    cJSON_AddNumberToObject(syscfg, "rt_delay", syscheck.rt_delay);
+    cJSON_AddNumberToObject(syscfg, "default_max_depth", syscheck.max_depth);
+    cJSON_AddNumberToObject(syscfg, "symlink_scan_interval", syscheck.sym_checker_interval);
+    cJSON_AddNumberToObject(syscfg, "file_max_size", syscheck.file_max_size);
 
     cJSON_AddItemToObject(root,"syscheck",syscfg);
 
@@ -513,16 +525,7 @@ cJSON *getSyscheckInternalOptions(void) {
 
     cJSON *syscheckd = cJSON_CreateObject();
 
-    cJSON_AddNumberToObject(syscheckd,"rt_delay",syscheck.rt_delay);
-    cJSON_AddNumberToObject(syscheckd,"default_max_depth",syscheck.max_depth);
-    cJSON_AddNumberToObject(syscheckd,"symlink_scan_interval",syscheck.sym_checker_interval);
     cJSON_AddNumberToObject(syscheckd,"debug",sys_debug_level);
-    cJSON_AddNumberToObject(syscheckd,"file_max_size",syscheck.file_max_size);
-#ifdef WIN32
-    cJSON_AddNumberToObject(syscheckd,"max_fd_win_rt",syscheck.max_fd_win_rt);
-#else
-    cJSON_AddNumberToObject(syscheckd,"max_audit_entries",syscheck.max_audit_entries);
-#endif
 
     cJSON_AddItemToObject(internals,"syscheck",syscheckd);
 
