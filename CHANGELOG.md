@@ -101,6 +101,9 @@ All notable changes to this project will be documented in this file.
 - **Ruleset:**
   - Added support for UFW firewall to decoders. ([#7100](https://github.com/wazuh/wazuh/pull/7100))
 
+- **Framework:**
+  - Added RBAC database upgrade and integrity checks. ([#6963](https://github.com/wazuh/wazuh/pull/6963))
+
 ### Changed
 
 - **Cluster:**
@@ -128,7 +131,7 @@ All notable changes to this project will be documented in this file.
   - Wazuh resources are now accessed by a relative path to the installation directory. ([#7327](https://github.com/wazuh/wazuh/pull/7327))
   - The error log that appeared when the agent cannot connect to SCA has been switched to warning. ([#8201](https://github.com/wazuh/wazuh/pull/8201))
   - The agent now validates the Audit connection configuration when enabling whodata for FIM on Linux. ([#8921](https://github.com/wazuh/wazuh/pull/8921))
-
+  
 - **API:**
   - Removed ruleset version from `GET /cluster/{node_id}/info` and `GET /manager/info` as it was deprecated. ([#6904](https://github.com/wazuh/wazuh/issues/6904))
   - Changed the `POST /groups` endpoint to specify the group name in a JSON body instead of in a query parameter. ([#6909](https://github.com/wazuh/wazuh/pull/6909))
@@ -142,6 +145,8 @@ All notable changes to this project will be documented in this file.
   - Increased to 100000 the maximum value accepted for `limit` API parameter, default value remains at 500. ([#8841](https://github.com/wazuh/wazuh/pull/8841))
 
 - **Framework:**
+  - Deprecated `update_ruleset` script. ([#6904](https://github.com/wazuh/wazuh/issues/6904))
+  - Changed the structure for several tables in `rbac.db` database to add the new `resource_type` column. ([#6963](https://github.com/wazuh/wazuh/pull/6963))
   - Improved agent insertion algorithm when Authd is not available. ([#8682](https://github.com/wazuh/wazuh/pull/8682))
 
 - **Ruleset:**
@@ -150,7 +155,7 @@ All notable changes to this project will be documented in this file.
 
 - **External dependencies:**
   - Upgrade boto3, botocore, requests, s3transfer and urllib3 Python dependencies to latest stable versions. ([#8886](https://github.com/wazuh/wazuh/pull/8886))
-
+  
 ### Fixed
 
 - **Cluster:**
@@ -329,7 +334,7 @@ All notable changes to this project will be documented in this file.
 
 - **API:**
   - Deprecated /manager/files and /cluster/{node_id}/files endpoints. ([#7209](https://github.com/wazuh/wazuh/issues/7209))
-
+  
 
 ## [v4.1.0] - 2021-02-15
 

@@ -2,13 +2,10 @@
 # Created by Wazuh, Inc. <info@wazuh.com>.
 # This program is free software; you can redistribute it and/or modify it under the terms of GP
 
-import os
-from functools import lru_cache
-
 import yaml
 
 import api.middlewares as middlewares
-from api import __path__ as api_path
+
 from api.authentication import change_secret
 from api.constants import SECURITY_CONFIG_PATH
 from wazuh import WazuhInternalError, WazuhError
@@ -17,12 +14,6 @@ from wazuh.rbac.orm import RolesManager, TokenManager
 REQUIRED_FIELDS = ['id']
 SORT_FIELDS = ['id', 'name']
 SORT_FIELDS_GET_USERS = ['id', 'username']
-
-
-@lru_cache(maxsize=None)
-def load_spec():
-    with open(os.path.join(api_path[0], 'spec', 'spec.yaml'), 'r', encoding='utf-8') as stream:
-        return yaml.safe_load(stream)
 
 
 def update_security_conf(new_config):
