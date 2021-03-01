@@ -822,22 +822,6 @@ static void HandleCheckEvent(Eventinfo *lf,int *socket,cJSON *event) {
                         event
                 );
 
-                if (result) {
-                    if(strcmp(wdb_response,result->valuestring)) {
-                        FillCheckEventInfo(lf, scan_id, id, name, title, description, rationale, remediation,
-                                compliance, reference, file, directory, process, registry, result,
-                                status, reason, NULL, command
-                        );
-                    }
-                } else if (status && status->valuestring) {
-                    if(strcmp(wdb_response, status->valuestring)) {
-                        FillCheckEventInfo(lf, scan_id, id, name, title, description, rationale,
-                                remediation, compliance, reference, file, directory,
-                                process, registry, result, status, reason, NULL, command
-                        );
-                    }
-                }
-
                 if (result_event < 0)
                 {
                     merror("Error storing policy monitoring information for agent '%s'", lf->agent_id);
@@ -1215,8 +1199,6 @@ static void HandleScanInfo(Eventinfo *lf,int *socket,cJSON *event) {
                     policy_id->valuestring);
             if (!first_scan) {
                 PushDumpRequest(lf->agent_id,policy_id->valuestring,0);
-            } else {
-                PushDumpRequest(lf->agent_id,policy_id->valuestring,1);
             }
 
             break;
