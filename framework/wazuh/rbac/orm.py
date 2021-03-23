@@ -3,6 +3,7 @@
 # This program is a free software; you can redistribute it and/or modify it under the terms of GPLv2
 
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -18,15 +19,13 @@ from sqlalchemy.exc import IntegrityError, InvalidRequestError, OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.orm.exc import UnmappedInstanceError
-from wazuh.core.utils import safe_move
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import wazuh.core.common as common
 from api.configuration import security_conf
 from api.constants import SECURITY_PATH
+from wazuh.core.utils import safe_move
 
-import wazuh.core.common as common
-
-import logging
 # Max reserved ID value
 max_id_reserved = 99
 cloud_reserved_range = 89
@@ -80,6 +79,8 @@ class SecurityError(IntEnum):
     RELATIONSHIP_ERROR = -8
     # Protected resources of the system
     PROTECTED_RESOURCES = -9
+    # Database constraint error
+    CONSTRAINT_ERROR = -10
 
 
 class ResourceType(Enum):
@@ -724,9 +725,36 @@ class AuthenticationManager:
         self.session = session if session else sessionmaker(
             bind=create_engine('sqlite:///' + DATABASE_FULL_PATH, echo=False))()
 
+    def edit_run_as(self, user_id: int, allow_run_as: bool):
+        """Change the specified user's allow_run_as flag.
+
+        Parameters
+        ----------
+        user_id : int
+            Unique user id
+        allow_run_as : bool
+            Flag that indicates if the user can log into the API through an authorization context
+
+        Returns
+        -------
+        True if the user's flag has been modified successfully.
+        INVALID if the specified value is not correct. False otherwise.
+        """
+        try:
+            user = self.session.query(User).filter_by(id=user_id).first()
+            if user is not None:
+                if isinstance(allow_run_as, bool):
+                    user.allow_run_as = allow_run_as
+                    self.session.commit()
+                    return True
+                return SecurityError.INVALID
+            return False
+        except IntegrityError:
+            self.session.rollback()
+            return False
+
     def add_user(self, username: str, password: str, user_id: int = None, hash_password: bool = False,
-                 allow_run_as: bool = False, created_at: DateTime = None, resource_type: ResourceType = None,
-                 check_default: bool = True) -> bool:
+                 created_at: DateTime = None, resource_type: ResourceType = None, check_default: bool = True) -> bool:
         """Creates a new user if it does not exist.
 
         Parameters
@@ -740,8 +768,6 @@ class AuthenticationManager:
         hash_password : bool
             True if the provided password is already hashed and should be stored as is.
             False if the provided password is NOT hashed and must be hashed before storing it.
-        allow_run_as : bool
-            Flag that indicates if the user can log into the API throw an authorization context
         created_at : DateTime
             Creation time for this resource. Specified during a database migration.
         resource_type : ResourceType
@@ -765,9 +791,9 @@ class AuthenticationManager:
                     user_id = max_id_reserved + 1
             except (TypeError, AttributeError):
                 pass
+
             self.session.add(User(username=username,
                                   password=password if hash_password else generate_password_hash(password),
-                                  allow_run_as=allow_run_as,
                                   created_at=created_at,
                                   resource_type=resource_type,
                                   user_id=user_id))
@@ -777,7 +803,7 @@ class AuthenticationManager:
             self.session.rollback()
             return False
 
-    def update_user(self, user_id: int, password: str, allow_run_as: bool, resource_type: ResourceType = None):
+    def update_user(self, user_id: int, password: str, resource_type: ResourceType = None):
         """Update an existing user. This function can update a resource regardless of its resource_type.
 
         Parameters
@@ -786,8 +812,6 @@ class AuthenticationManager:
             Unique user id
         password : str
             Password provided by user. It will be stored hashed
-        allow_run_as : bool
-            Enable authorization context login method for the new user
         resource_type : ResourceType
             Type of the resource:
                 'default': A system resource that cannot be modified or removed by a user.
@@ -807,9 +831,7 @@ class AuthenticationManager:
                     user.resource_type = resource_type.value if isinstance(resource_type, ResourceType) else resource_type
                 if password:
                     user.password = generate_password_hash(password)
-                if allow_run_as is not None:
-                    user.allow_run_as = allow_run_as
-                if password or allow_run_as is not None or resource_type:
+                if password or resource_type:
                     self.session.commit()
                     return True
             return False
@@ -1457,44 +1479,52 @@ class PoliciesManager:
         True -> Success | Invalid policy | Missing key (actions, resources, effect) or invalid policy (regex)
         """
         try:
-            if policy is not None and not json_validator(policy):
-                return SecurityError.ALREADY_EXIST
-            if len(policy.keys()) != 3:
+            # Check if the policy body is valid
+            if not policy or not json_validator(policy) or len(policy.keys()) != 3:
                 return SecurityError.INVALID
+
+            # Check if the specified policy name is already in use
+            if self.get_policy(name) != SecurityError.POLICY_NOT_EXIST:
+                return SecurityError.ALREADY_EXIST
+
             # To add a policy it must have the keys actions, resources, effect
-            if 'actions' in policy.keys() and 'resources' in policy.keys():
-                if 'effect' in policy.keys():
-                    # The keys actions and resources must be lists and the key effect must be str
-                    if isinstance(policy['actions'], list) and isinstance(policy['resources'], list) \
-                            and isinstance(policy['effect'], str):
-                        # Regular expression that prevents the creation of invalid policies
-                        regex = r'^[a-zA-Z_\-*]+:[a-zA-Z0-9_\-*]+([:|&]{0,1}[a-zA-Z0-9_\-\/.*]+)*$'
-                        for action in policy['actions']:
-                            if not re.match(regex, action):
-                                return SecurityError.INVALID
-                        for resource in policy['resources']:
-                            if not re.match(regex, resource):
-                                return SecurityError.INVALID
-                        try:
-                            if check_default and \
-                                    self.session.query(Policies).order_by(desc(Policies.id)
-                                                                          ).limit(1).scalar().id < max_id_reserved:
-                                policy_id = max_id_reserved + 1
-                        except (TypeError, AttributeError):
-                            pass
-                        self.session.add(Policies(name=name, policy=json.dumps(policy), policy_id=policy_id,
-                                                  created_at=created_at, resource_type=resource_type))
-                        self.session.commit()
-                        return True
-                    else:
-                        return SecurityError.INVALID
+            if 'actions' in policy and 'resources' in policy and 'effect' in policy:
+                # The keys actions and resources must be lists and the key effect must be str
+                if isinstance(policy['actions'], list) and isinstance(policy['resources'], list) \
+                        and isinstance(policy['effect'], str):
+                    # Regular expression that prevents the creation of invalid policies
+                    regex = r'^[a-zA-Z_\-*]+:[a-zA-Z0-9_\-*]+([:|&]{0,1}[a-zA-Z0-9_\-\/.*]+)*$'
+                    for action in policy['actions']:
+                        if not re.match(regex, action):
+                            return SecurityError.INVALID
+                    for resource in policy['resources']:
+                        if not re.match(regex, resource):
+                            return SecurityError.INVALID
+
+                    try:
+                        if not check_default:
+                            policies = sorted([p.id for p in self.get_policies()]) or [0]
+                            policy_id = max(filter(lambda x: not(x > cloud_reserved_range), policies)) + 1
+
+                        elif check_default and \
+                                self.session.query(Policies).order_by(desc(Policies.id)
+                                                                      ).limit(1).scalar().id < max_id_reserved:
+                            policy_id = max_id_reserved + 1
+
+                    except (TypeError, AttributeError):
+                        pass
+
+                    self.session.add(Policies(name=name, policy=json.dumps(policy), policy_id=policy_id,
+                                              created_at=created_at, resource_type=resource_type))
+                    self.session.commit()
+                    return True
                 else:
                     return SecurityError.INVALID
             else:
                 return SecurityError.INVALID
         except IntegrityError:
             self.session.rollback()
-            return SecurityError.ALREADY_EXIST
+            return SecurityError.CONSTRAINT_ERROR
 
     def delete_policy(self, policy_id: int):
         """Delete an existent policy in the system. This function can remove a resource regardless of its resource_type.
@@ -1566,7 +1596,8 @@ class PoliciesManager:
             self.session.rollback()
             return False
 
-    def update_policy(self, policy_id: int, name: str, policy: dict, resource_type: ResourceType = ResourceType.USER):
+    def update_policy(self, policy_id: int, name: str, policy: dict, check_default: bool = True,
+                      resource_type: ResourceType = ResourceType.USER):
         """Update an existent policy in the system. This function can update a resource regardless of its resource_type.
 
         Parameters
@@ -1577,6 +1608,8 @@ class PoliciesManager:
             New name for the Policy
         policy : dict
             New policy for the Policy
+        check_default : bool, optional
+            Flag that indicates if the policy ID can be less than `max_id_reserved`.
         resource_type : ResourceType
             Type of the resource:
                 'default': A system resource that cannot be modified or removed by a user.
@@ -1589,7 +1622,7 @@ class PoliciesManager:
         True -> Success | False -> Failure | Invalid policy | Name already in use
         """
         try:
-            if policy_id > max_id_reserved:
+            if policy_id > max_id_reserved or not check_default:
                 policy_to_update = self.session.query(Policies).filter_by(id=policy_id).first()
                 if policy_to_update:
                     if policy is not None and not json_validator(policy):
@@ -2585,7 +2618,6 @@ class RolesRulesManager:
         delete_orphans(self.session)
         self.session.close()
 
-
 class DatabaseManager:
     def __init__(self):
         self.engines = dict()
@@ -2625,9 +2657,10 @@ class DatabaseManager:
             default_users = yaml.safe_load(stream)
             with AuthenticationManager(self.sessions[database]) as auth:
                 for d_username, payload in default_users[next(iter(default_users))].items():
-                    auth.add_user(username=d_username, password=payload['password'],
-                                  allow_run_as=payload['allow_run_as'], resource_type=resource_type,
+                    auth.add_user(username=d_username, password=payload['password'], resource_type=resource_type,
                                   check_default=False)
+                    auth.edit_run_as(user_id=auth.get_user(username=d_username)['id'],
+                                     allow_run_as=payload['allow_run_as'])
 
         # Create default roles if they don't exist yet
         with open(os.path.join(default_path, "roles.yaml"), 'r') as stream:
@@ -2652,9 +2685,36 @@ class DatabaseManager:
             with PoliciesManager(self.sessions[database]) as pm:
                 for d_policy_name, payload in default_policies[next(iter(default_policies))].items():
                     for name, policy in payload['policies'].items():
-                        pm.add_policy(name=f'{d_policy_name}_{name}', policy=policy, resource_type=resource_type,
-                                      check_default=False)
+                        policy_name = f'{d_policy_name}_{name}'
+                        policy_result = pm.add_policy(name=policy_name, policy=policy, resource_type=resource_type,
+                                                      check_default=False)
+                        # Update policy if it exists
+                        if policy_result == SecurityError.ALREADY_EXIST:
+                            try:
+                                policy_id = pm.get_policy(policy_name)['id']
+                                if policy_id < max_id_reserved:
+                                    pm.update_policy(policy_id=policy_id, name=policy_name, policy=policy,
+                                                     resource_type=resource_type, check_default=False)
+                                else:
+                                    with RolesPoliciesManager() as rpm:
+                                        linked_roles = [role.id for role in
+                                                        rpm.get_all_roles_from_policy(policy_id=policy_id)]
+                                        new_positions = dict()
+                                        for role in linked_roles:
+                                            new_positions[role] = [p.id for p in
+                                                                   rpm.get_all_policies_from_role(role_id=role)] \
+                                                .index(policy_id)
 
+                                        pm.delete_policy(policy_id=policy_id)
+                                        pm.add_policy(name=policy_name, policy=policy, resource_type=resource_type,
+                                                      check_default=False)
+                                        policy_id = pm.get_policy(policy_name)['id']
+                                        for role, position in new_positions.items():
+                                            rpm.add_role_to_policy(policy_id=policy_id, role_id=role, position=position,
+                                                                   force_admin=True)
+
+                            except (KeyError, TypeError):
+                                pass
         # Create the relationships
         with open(os.path.join(default_path, "relationships.yaml"), 'r') as stream:
             default_relationships = yaml.safe_load(stream)
@@ -2713,12 +2773,13 @@ class DatabaseManager:
             for user in old_users:
                 auth_manager.add_user(username=user.username,
                                       password=user.password,
-                                      allow_run_as=user.allow_run_as,
                                       created_at=user.created_at,
                                       user_id=user.id,
                                       hash_password=True,
                                       resource_type=resource_type,
                                       check_default=check_default)
+                auth_manager.edit_run_as(user_id=auth_manager.get_user(username=d_username)['id'],
+                                         allow_run_as=payload['allow_run_as'])
 
         old_roles = get_data(Roles, Roles.id)
         with RolesManager(self.sessions[target]) as role_manager:

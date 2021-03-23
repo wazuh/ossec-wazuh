@@ -146,7 +146,6 @@ def test_add_policy(orm_setup):
     """Check policy is added to database"""
     with patch('wazuh.rbac.orm.create_engine', return_value=create_engine("sqlite://")):
         with orm_setup.PoliciesManager(orm_setup.db_manager.sessions[orm_setup.DATABASE_FULL_PATH]) as pm:
-            # New policy
             policy = {
                 'actions': ['agents:update'],
                 'resources': [
@@ -154,18 +153,28 @@ def test_add_policy(orm_setup):
                 ],
                 'effect': 'allow'
             }
+
+            # Too long name
+            assert pm.add_policy('v'*65, policy=policy) == orm_setup.SecurityError.CONSTRAINT_ERROR
+
+            # New policy
             pm.add_policy(name='newPolicy', policy=policy)
             assert pm.get_policy('newPolicy')
-            # New policy
+
+            # Another policy
             policy['actions'] = ['agents:delete']
             pm.add_policy(name='newPolicy1', policy=policy)
             assert pm.get_policy('newPolicy1')
 
-            # Too long name
-            assert not pm.add_policy('v'*65, policy)
-
             # Obtain not existent policy
             assert pm.get_policy('noexist') == orm_setup.SecurityError.POLICY_NOT_EXIST
+
+            # Attempt to insert a duplicate policy (same body, different name)
+            assert pm.add_policy(name='newPolicyName', policy=policy) == orm_setup.SecurityError.CONSTRAINT_ERROR
+
+            # Attempt to insert a duplicate policy (same name, different body)
+            policy['actions'] = ['agents:read']
+            assert pm.add_policy(name='newPolicy1', policy=policy) == orm_setup.SecurityError.ALREADY_EXIST
 
 
 def test_add_rule(orm_setup):
@@ -328,12 +337,21 @@ def test_delete_all_policies(orm_setup):
         assert len_policies == len(pm.get_policies()) + 2
 
 
+def test_edit_run_as(orm_setup):
+    """Check update a user's allow_run_as flag in the database"""
+    with orm_setup.AuthenticationManager(orm_setup.db_manager.sessions[orm_setup.DATABASE_FULL_PATH]) as am:
+        am.add_user(username='runas', password='testingA6!')
+        assert am.edit_run_as(user_id='106', allow_run_as=True)
+        assert am.edit_run_as(user_id='106', allow_run_as="INVALID") == orm_setup.SecurityError.INVALID
+        assert not am.edit_run_as(user_id='999', allow_run_as=False)
+
+
 def test_update_user(orm_setup):
     """Check update a user in the database"""
     with orm_setup.AuthenticationManager(orm_setup.db_manager.sessions[orm_setup.DATABASE_FULL_PATH]) as am:
         am.add_user(username='toUpdate', password='testingA6!')
-        assert am.update_user(user_id='106', password='testingA0!', allow_run_as=False)
-        assert not am.update_user(user_id='999', password='testingA0!', allow_run_as=True)
+        assert am.update_user(user_id='106', password='testingA0!')
+        assert not am.update_user(user_id='999', password='testingA0!')
 
 
 def test_update_role(orm_setup):
