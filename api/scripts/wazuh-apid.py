@@ -36,7 +36,6 @@ def start(foreground, root, config_file):
     from aiohttp_cache import setup_cache
     from api import alogging, configuration
 
-    import wazuh.security
     from api import __path__ as api_path
     # noinspection PyUnresolvedReferences
     from api import validator

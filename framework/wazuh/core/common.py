@@ -2,7 +2,6 @@
 # Created by Wazuh, Inc. <info@wazuh.com>.
 # This program is free software; you can redistribute it and/or modify it under the terms of GPLv2
 
-from functools import lru_cache
 import json
 import os
 import subprocess
@@ -13,9 +12,9 @@ from functools import wraps
 from grp import getgrnam
 from pwd import getpwnam
 from typing import Dict, Any
-from functools import lru_cache
 
 import yaml
+
 from api import __path__ as api_path
 
 try:
@@ -136,6 +135,7 @@ analysisd_stats = os.path.join(wazuh_path, 'var', 'run', 'wazuh-analysisd.state'
 remoted_stats = os.path.join(wazuh_path, 'var', 'run', 'wazuh-remoted.state')
 ar_conf_path = os.path.join(wazuh_path, 'etc', 'shared', 'ar.conf')
 pidfiles_path = os.path.join(wazuh_path, 'var', 'run')
+default_rbac_resources = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'rbac', 'default')
 
 # Ruleset
 # Ruleset paths
