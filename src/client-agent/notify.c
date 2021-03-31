@@ -22,7 +22,7 @@ char *getsharedfiles()
     char *ret;
     os_md5 md5sum;
 
-    if (OS_MD5_File(SHAREDCFG_FILEPATH, md5sum, OS_TEXT) != 0) {
+    if (OS_MD5_File(SHAREDCFG_FILE, md5sum, OS_TEXT) != 0) {
         md5sum[0] = 'x';
         md5sum[1] = '\0';
     }
@@ -54,7 +54,7 @@ char *get_agent_ip()
     }
 
     last_update = now;
-    *agent_ip = '\0';
+    agent_ip[0] = '\0';
 
     for (i = SOCK_ATTEMPTS; i > 0; --i) {
         if (sock = control_check_connection(), sock >= 0) {
@@ -66,6 +66,7 @@ char *get_agent_ip()
                 if (OS_RecvUnix(sock, IPSIZE, agent_ip) <= 0) {
                     mdebug1("Error receiving msg from control socket (%d) %s", errno, strerror(errno));
                     last_update = 0;
+                    agent_ip[0] = '\0';
                 }
             }
 
