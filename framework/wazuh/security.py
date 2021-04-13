@@ -10,8 +10,8 @@ import api.configuration as configuration
 from wazuh.core import common
 from wazuh.core.exception import WazuhError
 from wazuh.core.results import AffectedItemsWazuhResult, WazuhResult
-from wazuh.core.security import invalid_users_tokens, invalid_roles_tokens, invalid_run_as_tokens, revoke_tokens
-from wazuh.core.security import update_security_conf
+from wazuh.core.security import invalid_users_tokens, invalid_roles_tokens, invalid_run_as_tokens, revoke_tokens, \
+    REQUIRED_FIELDS, SORT_FIELDS, SORT_FIELDS_GET_USERS, update_security_conf
 from wazuh.core.utils import process_array
 from wazuh.rbac.decorators import expose_resources
 from wazuh.rbac.orm import AuthenticationManager, PoliciesManager, RolesManager, RolesPoliciesManager, \
@@ -65,9 +65,9 @@ def get_user_me(token):
 
 @expose_resources(actions=['security:read'], resources=['user:id:{user_ids}'],
                   post_proc_kwargs={'exclude_codes': [5001]})
-def get_users(user_ids: list = None, offset: int = 0, limit: int = common.database_limit, sort_by: dict = None,
-              sort_ascending: bool = True, search_text: str = None,
-              complementary_search: bool = False, search_in_fields: list = None):
+def get_users(user_ids: list = None, offset: int = 0, limit: int = common.database_limit, sort_by: list = None,
+              select: list = None, sort_ascending: bool = True, search_text: str = None, complementary_search: bool = False,
+              search_in_fields: list = None, resource_type=None):
     """Get the information of a specified user
 
     Parameters
@@ -78,16 +78,20 @@ def get_users(user_ids: list = None, offset: int = 0, limit: int = common.databa
         First item to return
     limit : int
         Maximum number of items to return
-    sort_by : dict
+    sort_by : list
         Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
     sort_ascending : bool
         Sort in ascending (true) or descending (false) order
     search_text : str
         Text to search
+    select : list
+        Select which fields to return (separated by comma)
     complementary_search : bool
         Find items without the text to search
     search_in_fields : list
         Fields to search in
+    resource_type : str
+        Filter elements by the specified resource type (default, protected or user)
 
     Returns
     -------
@@ -97,11 +101,15 @@ def get_users(user_ids: list = None, offset: int = 0, limit: int = common.databa
                                       some_msg='Some users were not returned',
                                       all_msg='All specified users were returned')
     affected_items = list()
+    resource_type = resource_type.value if isinstance(resource_type, ResourceType) else resource_type
     with AuthenticationManager() as auth:
         for user_id in user_ids:
             user_id = int(user_id)
             user = auth.get_user_id(user_id)
-            affected_items.append(user) if user else result.add_failed_item(id_=user_id, error=WazuhError(5001))
+            if not user:
+                result.add_failed_item(id_=user_id, error=WazuhError(5001))
+            elif not resource_type or (resource_type and user['resource_type'] == resource_type):
+                affected_items.append(user)
 
     data = process_array(affected_items, search_text=search_text, search_in_fields=search_in_fields,
                          complementary_search=complementary_search, sort_by=sort_by, sort_ascending=sort_ascending,
@@ -294,32 +302,50 @@ def remove_users(user_ids, resource_type: ResourceType = ResourceType.USER) -> A
 
 @expose_resources(actions=['security:read'], resources=['role:id:{role_ids}'],
                   post_proc_kwargs={'exclude_codes': [4002]})
-def get_roles(role_ids=None, offset=0, limit=common.database_limit, sort_by=None,
-              sort_ascending=True, search_text=None, complementary_search=False, search_in_fields=None):
-    """Returns information from all system roles, does not return information from its associated policies
+def get_roles(role_ids=None, offset=0, limit=common.database_limit, sort_by=None, select=None,
+              sort_ascending=True, search_text=None, complementary_search=False, search_in_fields=None,
+              resource_type=None):
+    """Return information from all system roles, does not return information from its associated policies.
 
-    :param role_ids: List of roles ids (None for all roles)
-    :param offset: First item to return
-    :param limit: Maximum number of items to return
-    :param sort_by: Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
-    :param sort_ascending: Sort in ascending (true) or descending (false) order
-    :param search_text: Text to search
-    :param complementary_search: Find items without the text to search
-    :param search_in_fields: Fields to search in
-    :return: Dictionary: {'items': array of items, 'totalItems': Number of items (without applying the limit)}
+    Parameters
+    ----------
+    role_ids : list, optional
+        List of roles ids to be obtained
+    offset : int, optional
+        First item to return
+    limit : int, optional
+        Maximum number of items to return
+    sort_by : list
+        Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
+    sort_ascending : bool
+        Sort in ascending (true) or descending (false) order
+    search_text : str
+        Text to search
+    select : list
+        Select which fields to return (separated by comma)
+    complementary_search : bool
+        Find items without the text to search
+    search_in_fields : list
+        Fields to search in
+    resource_type: str
+        Filter elements by the specified resource type (default, protected or user)
+
+    Returns
+    -------
+    Roles information
     """
     affected_items = list()
     result = AffectedItemsWazuhResult(none_msg='No role was returned',
                                       some_msg='Some roles were not returned',
                                       all_msg='All specified roles were returned')
+    resource_type = resource_type.value if isinstance(resource_type, ResourceType) else resource_type
     with RolesManager() as rm:
         for r_id in role_ids:
             role = rm.get_role_id(int(r_id))
-            if role != SecurityError.ROLE_NOT_EXIST:
-                affected_items.append(role)
-            else:
-                # Role id does not exist
+            if not role or role == SecurityError.ROLE_NOT_EXIST:
                 result.add_failed_item(id_=int(r_id), error=WazuhError(4002))
+            elif not resource_type or (resource_type and role['resource_type'] == resource_type):
+                affected_items.append(role)
 
     data = process_array(affected_items, search_text=search_text, search_in_fields=search_in_fields,
                          complementary_search=complementary_search, sort_by=sort_by, sort_ascending=sort_ascending,
@@ -432,7 +458,7 @@ def update_role(role_id=None, name=None, resource_type: ResourceType = None) -> 
 
     Parameters
     ----------
-    role_id : str
+    role_id : list
         Role id to be updated
     name : str
         The new role name
@@ -491,32 +517,50 @@ def update_role(role_id=None, name=None, resource_type: ResourceType = None) -> 
 
 @expose_resources(actions=['security:read'], resources=['policy:id:{policy_ids}'],
                   post_proc_kwargs={'exclude_codes': [4007]})
-def get_policies(policy_ids, offset=0, limit=common.database_limit, sort_by=None,
-                 sort_ascending=True, search_text=None, complementary_search=False, search_in_fields=None):
-    """Returns the information of a certain policy
+def get_policies(policy_ids, offset=0, limit=common.database_limit, sort_by=None, select=None,
+                 sort_ascending=True, search_text=None, complementary_search=False, search_in_fields=None,
+                 resource_type=None):
+    """Return the information of a certain policy.
 
-    :param policy_ids: ID of the policy on which the information will be collected (All for all policies)
-    :param offset: First item to return
-    :param limit: Maximum number of items to return
-    :param sort_by: Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
-    :param sort_ascending: Sort in ascending (true) or descending (false) order
-    :param search_text: Text to search
-    :param complementary_search: Find items without the text to search
-    :param search_in_fields: Fields to search in
-    :return: Dictionary: {'items': array of items, 'totalItems': Number of items (without applying the limit)}
+    Parameters
+    ----------
+    policy_ids : list
+        ID of the policy on which the information will be collected (All for all policies)
+    offset : int
+        First item to return
+    limit : int
+        Maximum number of items to return
+    sort_by : list
+        Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
+    sort_ascending : bool
+        Sort in ascending (true) or descending (false) order
+    search_text : str
+        Text to search
+    select : list
+        Select which fields to return (separated by comma)
+    complementary_search : bool
+        Find items without the text to search
+    search_in_fields : list
+        Fields to search in
+    resource_type: str
+        Filter elements by the specified resource type (default, protected or user)
+
+    Returns
+    -------
+    Policies information
     """
     result = AffectedItemsWazuhResult(none_msg='No policy was returned',
                                       some_msg='Some policies were not returned',
                                       all_msg='All specified policies were returned')
     affected_items = list()
+    resource_type = resource_type.value if isinstance(resource_type, ResourceType) else resource_type
     with PoliciesManager() as pm:
         for p_id in policy_ids:
             policy = pm.get_policy_id(int(p_id))
-            if policy != SecurityError.POLICY_NOT_EXIST:
-                affected_items.append(policy)
-            else:
-                # Policy id does not exist
+            if not policy or policy == SecurityError.POLICY_NOT_EXIST:
                 result.add_failed_item(id_=int(p_id), error=WazuhError(4007))
+            elif not resource_type or (resource_type and policy['resource_type'] == resource_type):
+                affected_items.append(policy)
 
     data = process_array(affected_items, search_text=search_text, search_in_fields=search_in_fields,
                          complementary_search=complementary_search, sort_by=sort_by, sort_ascending=sort_ascending,
@@ -590,7 +634,7 @@ def remove_policies(policy_ids=None, resource_type: ResourceType = ResourceType.
 
 @expose_resources(actions=['security:create'], resources=['*:*:*'],
                   post_proc_kwargs={'exclude_codes': [4006, 4009]})
-def add_policy(name: str = None, policy: str = None, resource_type: ResourceType = ResourceType.USER) \
+def add_policy(name: str = None, policy: dict = None, resource_type: ResourceType = ResourceType.USER) \
         -> AffectedItemsWazuhResult:
     """Create a policy in the system
 
@@ -598,7 +642,7 @@ def add_policy(name: str = None, policy: str = None, resource_type: ResourceType
     ----------
     name : str
         The new policy name
-    policy : str
+    policy : dict
         The new policy
     resource_type : ResourceType
         Determines the type of the resource:
@@ -634,11 +678,11 @@ def update_policy(policy_id=None, name=None, policy=None, resource_type: Resourc
 
     Parameters
     ----------
-    policy_id : int
+    policy_id : list
         Policy id to be update
     name : str
         The new policy name
-    policy : str
+    policy : dict
         The new policy
     resource_type : ResourceType
         Type of the resource to be updated.
@@ -698,33 +742,50 @@ def update_policy(policy_id=None, name=None, policy=None, resource_type: Resourc
 
 @expose_resources(actions=['security:read'], resources=['rule:id:{rule_ids}'],
                   post_proc_kwargs={'exclude_codes': [4022]})
-def get_rules(rule_ids=None, offset=0, limit=common.database_limit, sort_by=None,
-              sort_ascending=True, search_text=None, complementary_search=False, search_in_fields=None):
+def get_rules(rule_ids=None, offset=0, limit=common.database_limit, sort_by=None, select=None,
+              sort_ascending=True, search_text=None, complementary_search=False, search_in_fields=None,
+              resource_type=None):
     """Return information from all the security rules. It does not return information from its associated roles.
 
-    :param rule_ids: List of rule ids (None for all rules)
-    :param offset: First item to return
-    :param limit: Maximum number of items to return
-    :param sort_by: Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
-    :param sort_ascending: Sort in ascending (true) or descending (false) order
-    :param search_text: Text to search
-    :param complementary_search: Find items without the text to search
-    :param search_in_fields: Fields to search in
-    :return: Dictionary: {'items': array of items, 'totalItems': Number of items (without applying the limit)}
+    Parameters
+    ----------
+    rule_ids : list
+        List of rule ids (None for all rules)
+    offset : int
+        First item to return
+    limit : int, optional
+        Maximum number of items to return
+    sort_by : list
+        Fields to sort the items by. Format: {"fields":["field1","field2"],"order":"asc|desc"}
+    sort_ascending : bool
+        Sort in ascending (true) or descending (false) order
+    search_text : str
+        Text to search
+    select : list
+        Select which fields to return (separated by comma)
+    complementary_search : bool
+        Find items without the text to search
+    search_in_fields : list
+        Fields to search in
+    resource_type: str
+        Filter elements by the specified resource type (default, protected or user)
+
+    Returns
+    -------
+    Rules information
     """
     affected_items = list()
     result = AffectedItemsWazuhResult(none_msg='No security rule was returned',
                                       some_msg='Some security rules were not returned',
                                       all_msg='All specified security rules were returned')
-
+    resource_type = resource_type.value if isinstance(resource_type, ResourceType) else resource_type
     with RulesManager() as rum:
         for ru_id in rule_ids:
             rule = rum.get_rule(int(ru_id))
-            if rule != SecurityError.RULE_NOT_EXIST:
-                affected_items.append(rule)
-            else:
-                # Rule id does not exist
+            if not rule or rule == SecurityError.RULE_NOT_EXIST:
                 result.add_failed_item(id_=ru_id, error=WazuhError(4022))
+            elif not resource_type or (resource_type and rule['resource_type'] == resource_type):
+                affected_items.append(rule)
 
     data = process_array(affected_items, search_text=search_text, search_in_fields=search_in_fields,
                          complementary_search=complementary_search, sort_by=sort_by, sort_ascending=sort_ascending,
@@ -736,7 +797,7 @@ def get_rules(rule_ids=None, offset=0, limit=common.database_limit, sort_by=None
 
 
 @expose_resources(actions=['security:create'], resources=['*:*:*'])
-def add_rule(name: str = None, rule: str = None, resource_type: ResourceType = ResourceType.USER) \
+def add_rule(name: str = None, rule: dict = None, resource_type: ResourceType = ResourceType.USER) \
         -> AffectedItemsWazuhResult:
     """Create a rule in the system.
 
@@ -744,7 +805,7 @@ def add_rule(name: str = None, rule: str = None, resource_type: ResourceType = R
     ----------
     name : str
         The new rule name
-    rule : str
+    rule : dict
         The new rule
     resource_type : ResourceType
         Determines the type of the resource:
@@ -839,11 +900,11 @@ def update_rule(rule_id=None, name=None, rule=None, resource_type: ResourceType 
 
     Parameters
     ----------
-    rule_id : int
+    rule_id : list
         Rule id to be updated
     name : str
         The new rule name
-    rule : str
+    rule : dict
         The new rule
     resource_type : ResourceType
         Type of the resource to be updated.
@@ -1011,17 +1072,15 @@ def remove_user_role(user_id, role_ids):
 
 @expose_resources(actions=['security:update'], resources=['role:id:{role_id}', 'rule:id:{rule_ids}'],
                   post_proc_kwargs={'exclude_codes': [4002, 4008, 4022, 4023]})
-def set_role_rule(role_id, rule_ids, run_as=False):
+def set_role_rule(role_id, rule_ids):
     """Create a relationship between a role and one or more rules.
 
     Parameters
     ----------
-    role_id : int
+    role_id : list
         The new role_id
     rule_ids : list of int
         List of rule ids
-    run_as : dict
-        Login with an authorization context or not
 
     Returns
     -------
@@ -1099,7 +1158,7 @@ def set_role_policy(role_id, policy_ids, position=None):
 
     Parameters
     ----------
-    role_id : int
+    role_id : list
         The new role_id
     policy_ids : list of int
         List of policy IDs

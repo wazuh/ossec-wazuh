@@ -5349,7 +5349,16 @@ components:
       schema:
         type: string
         format: xml_filename_path
-
+    resource_type:
+      in: query
+      name: resource_type
+      description: "Filter by RBAC security resource protection level"
+      schema:
+        type: string
+        enum:
+          - 'default'
+          - 'protected'
+          - 'user'
 
 tags:
   - name: API Info
@@ -15079,6 +15088,7 @@ paths:
         - $ref: '#/components/parameters/search'
         - $ref: '#/components/parameters/select'
         - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/resource_type'
         - $ref: '#/components/parameters/wait_for_complete'
       responses:
         '200':
@@ -15100,10 +15110,12 @@ paths:
                         allow_run_as: true
                         roles:
                           - 2
+                        resource_type: "default"
                       - id: 4
                         username: guest
                         allow_run_as: false
                         roles: []
+                        resource_type: "default"
                       - id: 5
                         username: normal
                         allow_run_as: false
@@ -15111,15 +15123,18 @@ paths:
                           - 4
                           - 5
                           - 6
+                        resource_type: "default"
                       - id: 6
                         username: ossec
                         allow_run_as: true
                         roles:
                           - 2
                           - 5
+                        resource_type: "default"
                       - username: python
                         allow_run_as: true
                         roles: []
+                        resource_type: "default"
                       - id: 7
                         username: rbac
                         allow_run_as: false
@@ -15127,15 +15142,18 @@ paths:
                           - 3
                           - 4
                           - 5
+                        resource_type: "default"
                       - id: 1
                         username: wazuh
                         allow_run_as: true
                         roles:
                           - 1
+                        resource_type: "default"
                       - id: 2
                         username: wazuh-wui
                         allow_run_as: true
                         roles: []
+                        resource_type: "default"
                     total_affected_items: 8
                     total_failed_items: 0
                     failed_items: []
@@ -15198,10 +15216,10 @@ paths:
                       - id: 100
                         username: TestWazuh
                         allow_run_as: false
-                        roles: []
+                        roles: [ ]
                     total_affected_items: 1
                     total_failed_items: 0
-                    failed_items: []
+                    failed_items: [ ]
                   message: "User was successfully created"
                   error: 0
         '400':
@@ -15245,7 +15263,7 @@ paths:
                       - id: 100
                         username: new_user
                         allow_run_as: false
-                        roles: []
+                        roles: [ ]
                       - id: 102
                         username: another_user
                         allow_run_as: true
@@ -15253,7 +15271,7 @@ paths:
                           - 6
                     total_affected_items: 2
                     total_failed_items: 0
-                    failed_items: []
+                    failed_items: [ ]
                   message: "Users were successfully deleted"
                   error: 0
         '400':
@@ -15311,7 +15329,7 @@ paths:
                           - 2
                     total_affected_items: 1
                     total_failed_items: 0
-                    failed_items: []
+                    failed_items: [ ]
                   message: "User was successfully updated"
                   error: 0
         '400':
@@ -15342,6 +15360,7 @@ paths:
         - $ref: '#/components/parameters/search'
         - $ref: '#/components/parameters/select'
         - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/resource_type'
         - $ref: '#/components/parameters/wait_for_complete'
       responses:
         '200':
@@ -15390,6 +15409,7 @@ paths:
                       rules:
                         - 1
                         - 2
+                      resource_type: "default"
                     - id: 2
                       name: 'readonly'
                       policies:
@@ -15409,6 +15429,7 @@ paths:
                         - 35
                       users: []
                       rules: []
+                      resource_type: "default"
                   total_affected_items: 7
                   total_failed_items: 0
                   failed_items: []
@@ -15618,6 +15639,7 @@ paths:
         - $ref: '#/components/parameters/search'
         - $ref: '#/components/parameters/select'
         - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/resource_type'
         - $ref: '#/components/parameters/wait_for_complete'
       responses:
         '200':
@@ -15641,6 +15663,7 @@ paths:
                           username: elastic
                       roles:
                         - 1
+                      resource_type: "default"
                     - id: 2
                       name: wui_opendistro_admin
                       rule:
@@ -15648,6 +15671,7 @@ paths:
                           username: admin
                       roles:
                         - 1
+                      resource_type: "default"
                   total_affected_items: 2
                   total_failed_items: 0
                   failed_items: []
@@ -15663,7 +15687,6 @@ paths:
           $ref: '#/components/responses/InvalidHTTPMethodResponse'
         '429':
           $ref: '#/components/responses/TooManyRequestsResponse'
-
     post:
       tags:
         - Security
@@ -15854,6 +15877,7 @@ paths:
         - $ref: '#/components/parameters/search'
         - $ref: '#/components/parameters/select'
         - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/resource_type'
         - $ref: '#/components/parameters/wait_for_complete'
       responses:
         '200':
@@ -15882,6 +15906,7 @@ paths:
                       roles:
                         - 1
                         - 5
+                      resource_type: "default"
                     - id: 2
                       name: agents_all_agents
                       policy:
@@ -15899,6 +15924,7 @@ paths:
                       roles:
                         - 1
                         - 5
+                      resource_type: "default"
                   total_affected_items: 35
                   total_failed_items: 0
                   failed_items: []
