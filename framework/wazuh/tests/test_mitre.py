@@ -21,6 +21,8 @@ with patch('wazuh.core.common.wazuh_uid'):
         from wazuh import mitre
         from wazuh.core import mitre as core_mitre
 
+        del sys.modules['wazuh.rbac.orm']
+
 test_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 
 

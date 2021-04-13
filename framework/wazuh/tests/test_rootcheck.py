@@ -17,8 +17,6 @@ with patch('wazuh.common.wazuh_uid'):
         sys.modules['wazuh.rbac.orm'] = MagicMock()
         import wazuh.rbac.decorators
 
-        del sys.modules['wazuh.rbac.orm']
-
         from wazuh.tests.util import RBAC_bypasser
 
         wazuh.rbac.decorators.expose_resources = RBAC_bypasser
@@ -26,6 +24,8 @@ with patch('wazuh.common.wazuh_uid'):
         from wazuh.core.rootcheck import WazuhDBQueryRootcheck
         from wazuh.core.tests.test_rootcheck import InitRootcheck, send_msg_to_wdb, remove_db, \
             test_data_path as core_data
+
+        del sys.modules['wazuh.rbac.orm']
 
 test_data_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data')
 test_agent_path = os.path.join(test_data_path, 'agent')
