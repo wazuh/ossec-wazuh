@@ -368,6 +368,8 @@ struct kv_list {
     const struct kv_list *next;
 };
 
+wdb_t * wdb_open_cve();
+
 /**
  * @brief Opens global database and stores it in DB pool.
  *
@@ -1807,6 +1809,8 @@ int wdb_parse_task_set_timeout(wdb_t* wdb, const cJSON *parameters, char* output
  *        -1 On error: response contains "err" and an error description.
  */
 int wdb_parse_task_delete_old(wdb_t* wdb, const cJSON *parameters, char* output);
+
+int wdb_parse_cve_transaction(wdb_t* wdb, char* input, char* output);
 
 /**
  * @brief Function to parse the vuln_cves requests.

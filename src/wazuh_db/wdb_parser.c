@@ -220,6 +220,54 @@ int wdb_parse(char * input, char * output) {
     actor = input;
     *next++ = '\0';
 
+    if (strcmp(actor, "cve") == 0) {
+        query = next;
+
+        mdebug2("Cve query: %s", query);
+
+        if (wdb = wdb_open_cve(), !wdb) {
+            mdebug2("Couldn't open DB cve: %s/%s.db", "queue/vulnerabilities", WDB_CVE_NAME);
+            snprintf(output, OS_MAXSTR + 1, "err Couldn't open DB cve");
+            return OS_INVALID;
+        }
+
+        if (next = wstr_chr(query, ' '), next) {
+            *next++ = '\0';
+        }
+
+        if (strcmp(query, "sql") == 0) {
+            if (!next) {
+                mdebug1("CVE DB Invalid DB query syntax.");
+                mdebug2("CVE DB query error near: %s", query);
+                snprintf(output, OS_MAXSTR + 1, "err Invalid DB query syntax, near '%.32s'", query);
+                result = OS_INVALID;
+            } else {
+                if (data = wdb_exec(wdb->db, next), data) {
+                    out = cJSON_PrintUnformatted(data);
+                    snprintf(output, OS_MAXSTR + 1, "ok %s", out);
+                    os_free(out);
+                    cJSON_Delete(data);
+                } else {
+                    mdebug1("CVE DB Cannot execute SQL query; err database %s/%s.db: %s", WDB2_DIR, WDB_GLOB_NAME, sqlite3_errmsg(wdb->db));
+                    mdebug2("CVE DB SQL query: %s", next);
+                    snprintf(output, OS_MAXSTR + 1, "err Cannot execute CVE database query; %s", sqlite3_errmsg(wdb->db));
+                    result = OS_INVALID;
+                }
+            }
+        }
+        else if (strcmp(query, "transaction") == 0) {
+            wdb_parse_cve_transaction(wdb, next, output);
+        }
+        else {
+            mdebug1("Invalid DB query syntax.");
+            mdebug2("CVE DB query error near: %s", query);
+            snprintf(output, OS_MAXSTR + 1, "err Invalid DB query syntax, near '%.32s'", query);
+            result = OS_INVALID;
+        }
+        wdb_leave(wdb);
+        return result;
+    }
+
     if (strcmp(actor, "agent") == 0) {
         id = next;
 
@@ -6066,6 +6114,59 @@ int wdb_parse_task_delete_old(wdb_t* wdb, const cJSON *parameters, char* output)
 
     os_free(out);
     cJSON_Delete(response);
+
+    return result;
+}
+
+int wdb_parse_cve_transaction(wdb_t* wdb, char* input, char* output) {
+    int result = OS_INVALID;
+    int sql_result = 0;
+    char * next;
+    const char delim[] = " ";
+    char *tail = NULL;
+
+    static sqlite3_stmt *stmt = NULL;
+
+    next = strtok_r(input, delim, &tail);
+
+    if (!next){
+        snprintf(output, OS_MAXSTR + 1, "err Missing transaction action");
+    }
+    else if (strcmp(next, "prepare") == 0) {
+        char* query = tail;
+        sql_result = sqlite3_prepare_v2(wdb->db, query, -1, &stmt, NULL);    
+        snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);    
+    }
+    else if (strcmp(next, "bind_text") == 0) {
+        next = strtok_r(NULL, delim, &tail);
+        int pos = atoi(next);
+        char* bind = tail;
+        sql_result = sqlite3_bind_text(stmt, pos, bind, -1, NULL);
+        snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);
+    }
+    else if (strcmp(next, "bind_int") == 0) {
+        next = strtok_r(NULL, delim, &tail);
+        int pos = atoi(next);
+        int bind = atoi(tail);
+        sql_result = sqlite3_bind_int(stmt, pos, bind);
+        snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);
+    }
+    else if (strcmp(next, "step") == 0) {
+        sql_result = sqlite3_step(stmt);
+        snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);
+    }
+    else if (strcmp(next, "column_text") == 0) {
+        int column = atoi(tail);
+        char* sql_col_result = (char *) sqlite3_column_text(stmt, column);
+        snprintf(output, OS_MAXSTR + 1, "ok %s", sql_col_result);
+    }
+    else if (strcmp(next, "finalize") == 0) {
+        wdb_finalize(stmt);
+        snprintf(output, OS_MAXSTR + 1, "ok");
+    }
+    else {
+        snprintf(output, OS_MAXSTR + 1, "err Invalid vuln_cves action: %s", next);
+    }    
 
     return result;
 }

@@ -224,6 +224,47 @@ wdb_t * db_pool_last;
 int db_pool_size;
 OSHash * open_dbs;
 
+
+// Opens global database and stores it in DB pool. It returns a locked database or NULL
+wdb_t * wdb_open_cve() {
+    char path[PATH_MAX + 1] = "";
+    sqlite3 *db = NULL;
+    wdb_t * wdb = NULL;
+
+    w_mutex_lock(&pool_mutex);
+
+    // Finds DB in pool
+    if (wdb = (wdb_t *)OSHash_Get(open_dbs, WDB_CVE_NAME), wdb) {
+        // The corresponding w_mutex_unlock(&wdb->mutex) is called in wdb_leave(wdb_t * wdb)
+        w_mutex_lock(&wdb->mutex);
+        wdb->refcount++;
+        w_mutex_unlock(&pool_mutex);
+        return wdb;
+    } else {
+        // Try to open DB
+        snprintf(path, sizeof(path), "%s/%s.db", WDB2_DIR, WDB_CVE_NAME);
+
+        if (sqlite3_open_v2(path, &db, SQLITE_OPEN_READWRITE, NULL)) {
+            mdebug1("Cve database not found %s", sqlite3_errmsg(db));
+            sqlite3_close_v2(db);
+            w_mutex_unlock(&pool_mutex);
+            return wdb;
+        }
+        else {
+            wdb = wdb_init(db, WDB_CVE_NAME);
+            wdb_pool_append(wdb);
+        }
+    }
+
+    // The corresponding w_mutex_unlock(&wdb->mutex) is called in wdb_leave(wdb_t * wdb)
+    w_mutex_lock(&wdb->mutex);
+    wdb->refcount++;
+
+    w_mutex_unlock(&pool_mutex);
+    return wdb;
+}
+
+
 // Opens global database and stores it in DB pool. It returns a locked database or NULL
 wdb_t * wdb_open_global() {
     char path[PATH_MAX + 1] = "";
