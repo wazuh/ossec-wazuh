@@ -6122,48 +6122,81 @@ int wdb_parse_cve_transaction(wdb_t* wdb, char* input, char* output) {
     int result = OS_INVALID;
     int sql_result = 0;
     char * next;
+    char* action;
+    int trans;
     const char delim[] = " ";
     char *tail = NULL;
 
-    static sqlite3_stmt *stmt = NULL;
-
+    static sqlite3_stmt *stmt0 = NULL;
+    static sqlite3_stmt *stmt1 = NULL;
+    static sqlite3_stmt *stmt2 = NULL;
+    static sqlite3_stmt *stmt3 = NULL;   
+    static sqlite3_stmt **stmt = NULL;
+   
     next = strtok_r(input, delim, &tail);
+    trans = atoi(next); 
+    switch(trans){
+        case 0:
+        stmt = &stmt0;
+        break;
+        case 1:
+        stmt = &stmt1;
+        break;
+        case 2:
+        stmt = &stmt2;
+        break;
+        case 3:
+        stmt = &stmt3;
+        break;
+    }
 
-    if (!next){
+    next = strtok_r(NULL, delim, &tail);
+    action = next;
+
+    if (!action){
         snprintf(output, OS_MAXSTR + 1, "err Missing transaction action");
     }
-    else if (strcmp(next, "prepare") == 0) {
+    else if (strcmp(action, "prepare") == 0) {
         char* query = tail;
-        sql_result = sqlite3_prepare_v2(wdb->db, query, -1, &stmt, NULL);    
+        sql_result = sqlite3_prepare_v2(wdb->db, query, -1, stmt, NULL);    
         snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);    
     }
-    else if (strcmp(next, "bind_text") == 0) {
+    else if (strcmp(action, "bind_text") == 0) {
         next = strtok_r(NULL, delim, &tail);
         int pos = atoi(next);
         char* bind = tail;
-        sql_result = sqlite3_bind_text(stmt, pos, bind, -1, NULL);
+        sql_result = sqlite3_bind_text(*stmt, pos, bind, -1, NULL);
         snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);
     }
-    else if (strcmp(next, "bind_int") == 0) {
+    else if (strcmp(action, "bind_int") == 0) {
         next = strtok_r(NULL, delim, &tail);
         int pos = atoi(next);
         int bind = atoi(tail);
-        sql_result = sqlite3_bind_int(stmt, pos, bind);
+        sql_result = sqlite3_bind_int(*stmt, pos, bind);
         snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);
     }
-    else if (strcmp(next, "step") == 0) {
-        sql_result = sqlite3_step(stmt);
+    else if (strcmp(action, "step") == 0) {
+        sql_result = sqlite3_step(*stmt);
         snprintf(output, OS_MAXSTR + 1, "ok %d", sql_result);
     }
-    else if (strcmp(next, "column_text") == 0) {
+    else if (strcmp(action, "column_text") == 0) {
         int column = atoi(tail);
-        char* sql_col_result = (char *) sqlite3_column_text(stmt, column);
+        char* sql_col_result = (char *) sqlite3_column_text(*stmt, column);
         snprintf(output, OS_MAXSTR + 1, "ok %s", sql_col_result);
     }
-    else if (strcmp(next, "finalize") == 0) {
-        wdb_finalize(stmt);
+    else if (strcmp(action, "finalize") == 0) {
+        wdb_finalize(*stmt);
         snprintf(output, OS_MAXSTR + 1, "ok");
     }
+    else if (strcmp(action, "begin_t") == 0) {
+        sqlite3_exec(wdb->db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+        snprintf(output, OS_MAXSTR + 1, "ok");
+    }
+    else if (strcmp(action, "end_t") == 0) {
+        sqlite3_exec(wdb->db, "END TRANSACTION;", NULL, NULL, NULL);
+        snprintf(output, OS_MAXSTR + 1, "ok");
+    }
+
     else {
         snprintf(output, OS_MAXSTR + 1, "err Invalid vuln_cves action: %s", next);
     }    
