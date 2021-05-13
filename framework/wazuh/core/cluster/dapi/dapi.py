@@ -250,7 +250,9 @@ class DistributedAPI:
                 loop = asyncio.get_running_loop()
                 task = loop.run_in_executor(threadpool, run_local)
             try:
+                'agent_id' in self.f_kwargs and self.logger.info(f"APE Before waiting for task {self.f_kwargs['agent_id']}")
                 data = await asyncio.wait_for(task, timeout=timeout)
+                'agent_id' in self.f_kwargs and self.logger.info(f"APE After waiting for task {self.f_kwargs['agent_id']}")
             except asyncio.TimeoutError:
                 raise exception.WazuhInternalError(3021)
             except OperationalError:

@@ -1014,8 +1014,9 @@ async def insert_agent(request, pretty=False, wait_for_complete=False):
                           logger=logger,
                           rbac_permissions=request['token_info']['rbac_policies']
                           )
+    logger.info(f"APE Before distribute_function {f_kwargs['agent_id']}")
     data = raise_if_exc(await dapi.distribute_function())
-
+    logger.info(f"APE After distribute_function {f_kwargs['agent_id']}")
     return web.json_response(data=data, status=200, dumps=prettify if pretty else dumps)
 
 
