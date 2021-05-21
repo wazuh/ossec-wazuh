@@ -932,8 +932,10 @@ void fim_registry_scan() {
     /* Debug entries */
     mdebug1(FIM_WINREGISTRY_START);
 
+    w_mutex_lock(&syscheck.fim_entry_mutex);
     fim_db_set_all_registry_data_unscanned(syscheck.database);
     fim_db_set_all_registry_key_unscanned(syscheck.database);
+    w_mutex_unlock(&syscheck.fim_entry_mutex);
 
     /* Get sub class and a valid registry entry */
     for (i = 0; syscheck.registry[i].entry; i++) {
