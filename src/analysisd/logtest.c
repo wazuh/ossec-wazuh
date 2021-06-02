@@ -211,7 +211,7 @@ cJSON *w_logtest_process_log(cJSON * request, w_logtest_session_t * session, boo
     /* Add alert description to the event and check alert level if exist a match */
     if (lf->generated_rule) {
         lf->comment = ParseRuleComment(lf);
-        *alert_generated = ((check_add_event == 1) && Config.logbylevel <= lf->generated_rule->level) ? true : false;
+        *alert_generated = ((check_add_event == 1) && session->logbylevel <= lf->generated_rule->level) ? true : false;
     }
 
     /* Parse the alert */
@@ -480,6 +480,9 @@ w_logtest_session_t * w_logtest_initialize_session(OSList * list_msg) {
     /* Set rule_match and decoder_match to zero */
     memset(&session->decoder_match, 0, sizeof(regex_matching));
     memset(&session->rule_match, 0, sizeof(regex_matching));
+
+    /* Set custom level for alerts */
+    session->logbylevel = ruleset_config.logbylevel;
 
     retval = false;
 
@@ -1193,6 +1196,7 @@ bool w_logtest_ruleset_load(_Config * ruleset_config, OSList * list_msg) {
 bool w_logtest_ruleset_load_config(OS_XML * xml, XML_NODE conf_section_nodes, _Config * ruleset_config, OSList * list_msg) {
 
     const char * XML_RULESET = "ruleset";
+    const char * XML_ALERTS = "alerts";
     bool retval = true;
 
     /* Load configuration of the configuration section */
@@ -1221,6 +1225,13 @@ bool w_logtest_ruleset_load_config(OS_XML * xml, XML_NODE conf_section_nodes, _C
         }
 
         /* Load alert by level */
+
+        if (strcmp(conf_section_nodes[i]->element, XML_ALERTS) == 0 && Read_Alerts(options_node, ruleset_config, list_msg) < 0) {
+            smerror(list_msg, "Read alert level error");
+            OS_ClearNode(options_node);
+            retval = false;
+            break;
+        }
 
         OS_ClearNode(options_node);
     }
