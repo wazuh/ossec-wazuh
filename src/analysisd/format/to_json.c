@@ -23,7 +23,7 @@
 void add_json_attrs(const char *attrs_str, cJSON *file_diff, char after);
 
 /* Convert Eventinfo to json */
-char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log)
+char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log, OSList * list_msg)
 {
     cJSON* root;
     cJSON* rule = NULL;
@@ -114,7 +114,7 @@ char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log)
 
             for (i = 0; lf->generated_rule->mitre_technique_id[i] != NULL; i++) {
                 if (data_technique = mitre_get_attack(lf->generated_rule->mitre_technique_id[i]), !data_technique) {
-                    mwarn("Mitre Technique ID '%s' not found in database.", lf->generated_rule->mitre_technique_id[i]);
+                    smwarn(list_msg, "Mitre Technique ID '%s' not found in database.", lf->generated_rule->mitre_technique_id[i]);
                 } else {
                     OSListNode *tactic_node = OSList_GetFirstNode(data_technique->tactics_list);
                     bool tactic_exist = FALSE;
@@ -155,7 +155,7 @@ char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log)
                             cJSON_AddItemToArray(mitre_technique_array, cJSON_CreateString(data_technique->technique_name));
                         }
                     } else {
-                        mwarn("Mitre Tactic ID '%s' is not a tactic of '%s'.",
+                        smwarn(list_msg, "Mitre Tactic ID '%s' is not a tactic of '%s'.",
                             lf->generated_rule->mitre_tactic_id[i],
                             lf->generated_rule->mitre_technique_id[i]);
                     }
@@ -195,7 +195,7 @@ char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log)
 
             for (i = 0; lf->generated_rule->mitre_id[i] != NULL; i++) {
                 if (data_technique = mitre_get_attack(lf->generated_rule->mitre_id[i]), !data_technique) {
-                    mwarn("Mitre Technique ID '%s' not found in database.", lf->generated_rule->mitre_id[i]);
+                    smwarn(list_msg, "Mitre Technique ID '%s' not found in database.", lf->generated_rule->mitre_id[i]);
                 } else {
                     OSListNode *tactic_node = OSList_GetFirstNode(data_technique->tactics_list);
 
@@ -343,7 +343,7 @@ char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log)
                 if (old_perm = win_perm_to_json(lf->perm_before), old_perm) {
                     cJSON_AddItemToObject(file_diff, "win_perm_before", old_perm);
                 } else {
-                    merror("The old permissions could not be added to the JSON alert.");
+                    smerror(list_msg, "The old permissions could not be added to the JSON alert.");
                 }
             } else {
                 cJSON_AddStringToObject(file_diff, "perm_before", lf->perm_before);
@@ -355,7 +355,7 @@ char* Eventinfo_to_jsonstr(const Eventinfo* lf, bool force_full_log)
                 if (new_perm = win_perm_to_json(lf->fields[FIM_PERM].value), new_perm) {
                     cJSON_AddItemToObject(file_diff, "win_perm_after", new_perm);
                 } else {
-                    merror("The new permissions could not be added to the JSON alert.");
+                   smerror(list_msg, "The new permissions could not be added to the JSON alert.");
                 }
             } else {
                 cJSON_AddStringToObject(file_diff, "perm_after", lf->fields[FIM_PERM].value);
