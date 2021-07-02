@@ -536,9 +536,6 @@ void LogCollectorStart()
                     if (update_fname(i, j)) {
                         if (current->fp) {
                             fclose(current->fp);
-#ifdef WIN32
-                            CloseHandle(current->h);
-#endif
                         }
                         current->fp = NULL;
                         current->exists = 1;
@@ -612,12 +609,10 @@ void LogCollectorStart()
                                     NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
                     if (h1 == INVALID_HANDLE_VALUE) {
                         fclose(current->fp);
-                        CloseHandle(current->h);
                         current->fp = NULL;
                         merror(FILE_ERROR, current->file);
                     } else if (GetFileInformationByHandle(h1, &lpFileInformation) == 0) {
                         fclose(current->fp);
-                        CloseHandle(current->h);
                         CloseHandle(h1);
                         current->fp = NULL;
                         merror(FILE_ERROR, current->file);
@@ -677,7 +672,6 @@ void LogCollectorStart()
                         fclose(current->fp);
 
 #ifdef WIN32
-                        CloseHandle(current->h);
                         CloseHandle(h1);
 #endif
 
@@ -712,7 +706,6 @@ void LogCollectorStart()
                         fclose(current->fp);
 
 #ifdef WIN32
-                        CloseHandle(current->h);
                         CloseHandle(h1);
 #endif
                         current->fp = NULL;
@@ -739,15 +732,9 @@ void LogCollectorStart()
                                         FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE,
                                         NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
                         if (h1 == INVALID_HANDLE_VALUE) {
-                            if (current->h) {
-                                CloseHandle(current->h);
-                            }
                             mdebug1(FILE_ERROR, current->file);
                             file_exists = 0;
                         } else if (GetFileInformationByHandle(h1, &lpFileInformation) == 0) {
-                            if (current->h) {
-                                CloseHandle(current->h);
-                            }
                             mdebug1(FILE_ERROR, current->file);
                             file_exists = 0;
                         }
@@ -793,9 +780,6 @@ void LogCollectorStart()
 
                     if (current->fp) {
                         fclose(current->fp);
-#ifdef WIN32
-                        CloseHandle(current->h);
-#endif
                     }
 
                     current->fp = NULL;
@@ -974,7 +958,7 @@ int handle_file(int i, int j, __attribute__((unused)) int do_fseek, int do_log)
     lf->fp = _fdopen(fd, "r");
     if (!lf->fp) {
         merror(FOPEN_ERROR, lf->file, errno, strerror(errno));
-        CloseHandle(lf->h);
+        _close(fd);
         goto error;
     }
 
@@ -985,7 +969,6 @@ int handle_file(int i, int j, __attribute__((unused)) int do_fseek, int do_log)
     if (GetFileInformationByHandle(lf->h, &lpFileInformation) == 0) {
         merror("Unable to get file information by handle.");
         fclose(lf->fp);
-        CloseHandle(lf->h);
         lf->fp = NULL;
         goto error;
     }
@@ -1064,7 +1047,7 @@ int reload_file(logreader * lf) {
     lf->fp = _fdopen(fd, "r");
 
     if (!lf->fp) {
-        CloseHandle(lf->h);
+        _close(fd);
         return (-1);
     }
 #endif
@@ -1085,7 +1068,6 @@ void close_file(logreader * lf) {
     lf->fp = NULL;
 
 #ifdef WIN32
-    CloseHandle(lf->h);
     lf->h = NULL;
 #endif
 }
@@ -2181,7 +2163,6 @@ void * w_input_thread(__attribute__((unused)) void * t_id){
                     if((c_currenttime - current->age) >= file_currenttime) {
                         mdebug1("Ignoring file '%s' due to modification time",current->file);
                         fclose(current->fp);
-                        CloseHandle(current->h);
                         current->fp = NULL;
                         current->h = NULL;
                         w_mutex_unlock(&current->mutex);
@@ -2271,9 +2252,6 @@ void * w_input_thread(__attribute__((unused)) void * t_id){
 
                         /* Close the file */
                         fclose(current->fp);
-    #ifdef WIN32
-                        CloseHandle(current->h);
-    #endif
                         current->fp = NULL;
 
                         /* Try to open it again */
