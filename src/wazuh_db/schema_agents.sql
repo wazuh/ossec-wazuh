@@ -117,6 +117,8 @@ CREATE TABLE IF NOT EXISTS sys_osinfo (
     version TEXT,
     os_release TEXT,
     checksum TEXT NOT NULL CHECK (checksum <> ''),
+    triaged INTEGER(1) DEFAULT 0,
+    reference TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (scan_id, os_name)
 );
 
@@ -181,6 +183,16 @@ CREATE TABLE IF NOT EXISTS sys_programs (
 
 CREATE INDEX IF NOT EXISTS programs_id ON sys_programs (scan_id);
 
+CREATE TRIGGER obsolete_vulnerabilities
+    AFTER DELETE ON sys_programs
+    WHEN (old.checksum = 'legacy' AND NOT EXISTS (SELECT 1 FROM sys_programs
+                                                  WHERE item_id = old.item_id
+                                                  AND scan_id != old.scan_id ))
+    OR old.checksum != 'legacy'
+    BEGIN
+        UPDATE vuln_cves SET status = 'OBSOLETE' WHERE vuln_cves.reference = old.item_id;
+END;
+
 CREATE TABLE IF NOT EXISTS sys_hotfixes (
     scan_id INTEGER,
     scan_time TEXT,
@@ -190,6 +202,26 @@ CREATE TABLE IF NOT EXISTS sys_hotfixes (
 );
 
 CREATE INDEX IF NOT EXISTS hotfix_id ON sys_hotfixes (scan_id);
+
+CREATE TRIGGER hotfix_delete
+    AFTER DELETE ON sys_hotfixes
+    WHEN (old.checksum = 'legacy' AND NOT EXISTS (SELECT 1 FROM sys_hotfixes
+                                                  WHERE hotfix = old.hotfix
+                                                  AND scan_id != old.scan_id ))
+    OR old.checksum != 'legacy'
+    BEGIN
+        UPDATE sys_osinfo SET triaged = 0;
+END;
+
+CREATE TRIGGER hotfix_insert
+    AFTER INSERT ON sys_hotfixes
+    WHEN (new.checksum = 'legacy' AND NOT EXISTS (SELECT 1 FROM sys_hotfixes
+                                                  WHERE hotfix = new.hotfix
+                                                  AND scan_id != new.scan_id ))
+    OR new.checksum != 'legacy'
+    BEGIN
+        UPDATE sys_osinfo SET triaged = 0;
+END;
 
 CREATE TABLE IF NOT EXISTS sys_processes (
     scan_id INTEGER,
@@ -323,21 +355,19 @@ CREATE TABLE IF NOT EXISTS sca_check_compliance (
 CREATE INDEX IF NOT EXISTS comp_id_check_index ON sca_check_compliance (id_check);
 
 CREATE TABLE IF NOT EXISTS vuln_metadata (
-    LAST_SCAN INTEGER,
-    WAZUH_VERSION TEXT,
-    HOTFIX_SCAN_ID TEXT
+    LAST_PARTIAL_SCAN INTEGER,
+    LAST_FULL_SCAN INTEGER
 );
-INSERT INTO vuln_metadata (LAST_SCAN, WAZUH_VERSION, HOTFIX_SCAN_ID)
-    SELECT '0', '0', '0' WHERE NOT EXISTS (
-        SELECT * FROM vuln_metadata
-    );
+
+INSERT INTO vuln_metadata (LAST_PARTIAL_SCAN, LAST_FULL_SCAN) VALUES (0, 0);
 
 CREATE TABLE IF NOT EXISTS sync_info (
     component TEXT PRIMARY KEY,
     last_attempt INTEGER DEFAULT 0,
     last_completion INTEGER DEFAULT 0,
     n_attempts INTEGER DEFAULT 0,
-    n_completions INTEGER DEFAULT 0
+    n_completions INTEGER DEFAULT 0,
+    last_agent_checksum TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS vuln_cves (
@@ -345,10 +375,15 @@ CREATE TABLE IF NOT EXISTS vuln_cves (
     version TEXT,
     architecture TEXT,
     cve TEXT,
-    PRIMARY KEY (name, version, architecture, cve)
+    reference TEXT DEFAULT '' NOT NULL,
+    type TEXT DEFAULT '' NOT NULL CHECK (type IN ('OS', 'PACKAGE')),
+    status TEXT DEFAULT 'PENDING' NOT NULL CHECK (status IN ('VALID', 'PENDING', 'OBSOLETE')),
+    PRIMARY KEY (reference, cve)
 );
 CREATE INDEX IF NOT EXISTS packages_id ON vuln_cves (name);
 CREATE INDEX IF NOT EXISTS cves_id ON vuln_cves (cve);
+CREATE INDEX IF NOT EXISTS cve_type ON vuln_cves (type);
+CREATE INDEX IF NOT EXISTS cve_status ON vuln_cves (status);
 
 BEGIN;
 
@@ -356,5 +391,7 @@ INSERT INTO metadata (key, value) VALUES ('db_version', '8');
 INSERT INTO scan_info (module) VALUES ('fim');
 INSERT INTO scan_info (module) VALUES ('syscollector');
 INSERT INTO sync_info (component) VALUES ('fim');
+INSERT INTO sync_info (component) VALUES ('syscollector-packages');
+INSERT INTO sync_info (component) VALUES ('syscollector-hotfixes');
 
 COMMIT;

@@ -55,6 +55,8 @@ cJSON * __wrap_cJSON_CreateObject(void);
 
 cJSON * __wrap_cJSON_CreateNumber(double num);
 
+extern cJSON * __real_cJSON_CreateNumber(double num);
+
 cJSON * __wrap_cJSON_CreateString(const char *string);
 
 extern cJSON * __real_cJSON_CreateString(const char *string);
@@ -82,6 +84,8 @@ cJSON_bool __wrap_cJSON_IsObject(cJSON * item);
 void expect_cJSON_IsObject_call(int ret);
 
 cJSON * __wrap_cJSON_Parse(const char *value);
+
+cJSON * __wrap_cJSON_ParseWithOpts(const char *value, const char **return_parse_end, cJSON_bool require_null_terminated);
 
 extern cJSON * __real_cJSON_Parse(const char *value);
 
