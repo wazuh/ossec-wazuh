@@ -5,6 +5,8 @@ filebeat.modules:
       enabled: true
     archives:
       enabled: false
+    archives-split:
+      enabled: false
 
 setup.template.json.enabled: true
 setup.template.json.path: '/etc/filebeat/wazuh-template.json'
