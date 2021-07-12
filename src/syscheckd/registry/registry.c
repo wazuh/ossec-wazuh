@@ -13,8 +13,7 @@
 #include "registry.h"
 #include "shared.h"
 #include "../syscheck.h"
-#include "../db/fim_db.h"
-#include "../db/fim_db_registries.h"
+#include "db/include/db.hpp"
 #include "os_crypto/md5/md5_op.h"
 #include "os_crypto/sha1/sha1_op.h"
 #include "os_crypto/md5_sha1/md5_sha1_op.h"
@@ -75,11 +74,11 @@ int fim_set_root_key(HKEY *root_key_handle, const char *full_key, const char **s
     return 0;
 }
 
-registry *fim_registry_configuration(const char *key, int arch) {
+registry_t *fim_registry_configuration(const char *key, int arch) {
     int it = 0;
     int top = 0;
     int match;
-    registry *ret = NULL;
+    registry_t *ret = NULL;
 
     for (it = 0; syscheck.registry[it].entry; it++) {
         if (arch != syscheck.registry[it].arch) {
@@ -108,7 +107,7 @@ registry *fim_registry_configuration(const char *key, int arch) {
  * @param configuration The configuration associated with the registry entry.
  * @return 0 if the path is valid, -1 if the path is to be excluded.
  */
-int fim_registry_validate_recursion_level(const char *key_path, const registry *configuration) {
+int fim_registry_validate_recursion_level(const char *key_path, const registry_t *configuration) {
     const char *pos;
     int depth = 0;
     unsigned int parent_path_size;
@@ -146,7 +145,7 @@ int fim_registry_validate_recursion_level(const char *key_path, const registry *
  * @param key 1 if the entry is a key, 0 if the entry is a value.
  * @return 0 if the path is valid, -1 if the path is to be excluded.
  */
-int fim_registry_validate_ignore(const char *entry, const registry *configuration, int key) {
+int fim_registry_validate_ignore(const char *entry, const registry_t *configuration, int key) {
     int ign_it;
     registry_ignore **ignore_list;
     registry_ignore_regex **ignore_list_regex;
@@ -365,7 +364,7 @@ void fim_registry_final_digests(int opts,
  * @param configuration The confguration associated with the value.
  * @param data_buffer Raw buffer holding the value's contents.
  */
-void fim_registry_calculate_hashes(fim_entry *entry, registry *configuration, BYTE *data_buffer) {
+void fim_registry_calculate_hashes(fim_entry *entry, registry_t *configuration, BYTE *data_buffer) {
     MD5_CTX md5_ctx;
     SHA_CTX sha1_ctx;
     SHA256_CTX sha256_ctx;
@@ -423,7 +422,7 @@ void fim_registry_calculate_hashes(fim_entry *entry, registry *configuration, BY
  * @param configuration The confguration associated with the key.
  * @return A fim_registry_key object holding the information from the queried key, NULL on error.
  */
-fim_registry_key *fim_registry_get_key_data(HKEY key_handle, const char *path, const registry *configuration) {
+fim_registry_key *fim_registry_get_key_data(HKEY key_handle, const char *path, const registry_t *configuration) {
     fim_registry_key *key;
 
     os_calloc(1, sizeof(fim_registry_key), key);
@@ -520,7 +519,7 @@ void fim_registry_process_value_delete_event(fdb_t *fim_sql,
                                              __attribute__((unused)) void *_w_evt) {
     int alert = *(int *)_alert;
     fim_event_mode event_mode = *(fim_event_mode *)_ev_mode;
-    registry *configuration;
+    registry_t *configuration;
 
     configuration = fim_registry_configuration(data->registry_entry.key->path, data->registry_entry.key->arch);
     if (configuration == NULL) {
@@ -563,7 +562,7 @@ void fim_registry_process_key_delete_event(fdb_t *fim_sql,
     int alert = *(int *)_alert;
     fim_event_mode event_mode = *(fim_event_mode *)_ev_mode;
     fim_tmp_file *file;
-    registry *configuration;
+    registry_t *configuration;
     int result;
 
     configuration = fim_registry_configuration(data->registry_entry.key->path, data->registry_entry.key->arch);
@@ -637,7 +636,7 @@ void fim_registry_process_value_event(fim_entry *new,
                                       BYTE *data_buffer) {
     char *value_path;
     size_t value_path_length;
-    registry *configuration;
+    registry_t *configuration;
     cJSON *json_event;
     char *diff = NULL;
 
@@ -775,7 +774,7 @@ void fim_open_key(HKEY root_key_handle,
                   const char *sub_key,
                   int arch,
                   fim_event_mode mode,
-                  registry *parent_configuration) {
+                  registry_t *parent_configuration) {
     HKEY current_key_handle = NULL;
     REGSAM access_rights;
     DWORD sub_key_count = 0;
@@ -785,7 +784,7 @@ void fim_open_key(HKEY root_key_handle,
     FILETIME file_time = { 0 };
     DWORD i;
     fim_entry new, saved;
-    registry *configuration;
+    registry_t *configuration;
 
     if (root_key_handle == NULL || full_key == NULL || sub_key == NULL) {
         return;

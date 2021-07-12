@@ -5,9 +5,11 @@
  *
  * @copyright Copyright (C) 2015-2021 Wazuh, Inc.
  */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-#ifdef WIN32
-#include "fim_db_registries.h"
+#include "db.hpp"
 
 extern const char *SQL_STMT[];
 
@@ -28,7 +30,7 @@ static void fim_db_bind_registry_data_name_key_id(fdb_t *fim_sql, int index, con
 
 
 /**
- * @brief Binds path into registry statement
+ * @brief Binds path into statement
  *
  * @param fim_sql FIM database structure.
  * @param index Index of the particular statement.
@@ -632,4 +634,6 @@ int fim_db_process_read_registry_data_file(fdb_t *fim_sql, fim_tmp_file *file, p
     return FIMDB_OK;
 }
 
+#ifdef __cplusplus
+}
 #endif
