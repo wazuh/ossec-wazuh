@@ -239,7 +239,7 @@ def restart_agents(agent_list: list = None) -> AffectedItemsWazuhResult:
 
 
 @expose_resources(actions=["group:read"], resources=["group:id:{group_id}"], post_proc_func=None)
-def get_agents_in_group_restart(group_id: list = None) -> list:
+def get_agents_in_group_restart(group_id: list = None) -> dict:
     """Get the agents of a given group in order to restart them.
 
     Parameters
@@ -249,10 +249,10 @@ def get_agents_in_group_restart(group_id: list = None) -> list:
 
     Returns
     -------
-    List
-        List of agents belonging to the specified group.
+    Dict
+        Dict with a list of agents belonging to the specified group.
     """
-    return list(expand_group(group_name=group_id[0]))
+    return {'agents': list(expand_group(group_name=group_id[0]))}
 
 
 @expose_resources(actions=['cluster:read'], resources=[f'node:id:{node_id}'], post_proc_func=None)
